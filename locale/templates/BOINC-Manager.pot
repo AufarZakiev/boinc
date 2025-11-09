@@ -878,6 +878,10 @@ msgstr ""
 msgid "Snooze GPU"
 msgstr ""
 
+#: clientgui/BOINCTaskBar.cpp:573
+msgid "Finish active tasks and quit"
+msgstr ""
+
 #: clientgui/BOINCTaskBar.cpp:576
 msgid "E&xit"
 msgstr ""

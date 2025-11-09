@@ -889,6 +889,10 @@ msgstr "Приостановить на час"
 msgid "Snooze GPU"
 msgstr "Приостановить ГП на час"
 
+#: clientgui/BOINCTaskBar.cpp:573
+msgid "Finish active tasks and quit"
+msgstr "Завершить текущие задания и выйти"
+
 #: clientgui/BOINCTaskBar.cpp:576
 msgid "E&xit"
 msgstr "Выход"
