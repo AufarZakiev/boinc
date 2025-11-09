@@ -454,6 +454,9 @@ CMainDocument::CMainDocument() : rpc(this) {
     m_dtLastFrameViewRefreshRPCTime = wxDateTime((time_t)0);
 
     status.max_event_log_lines = 0;
+#ifdef __WXMSW__
+    m_bFinishActiveTasksAndQuitPending = false;
+#endif
 }
 
 
@@ -710,7 +713,10 @@ bool CMainDocument::IsReconnecting() {
 
 
 void CMainDocument::ForceDisconnect() {
-    return m_pNetworkConnection->ForceDisconnect();
+#ifdef __WXMSW__
+    m_bFinishActiveTasksAndQuitPending = false;
+#endif
+    m_pNetworkConnection->ForceDisconnect();
 }
 
 
@@ -1230,6 +1236,91 @@ int CMainDocument::RunBenchmarks() {
 
 int CMainDocument::CoreClientQuit() {
     return rpc.quit();
+}
+
+void CMainDocument::InitiateFinishActiveTasksAndQuit() {
+#ifdef __WXMSW__
+    wxLogTrace(wxT("Function Start/End"), wxT("CMainDocument::InitiateFinishActiveTasksAndQuit - Function Begin"));
+
+    if (m_bFinishActiveTasksAndQuitPending) {
+        wxLogTrace(wxT("Function Status"), wxT("CMainDocument::InitiateFinishActiveTasksAndQuit - Already pending"));
+        wxLogTrace(wxT("Function Start/End"), wxT("CMainDocument::InitiateFinishActiveTasksAndQuit - Function End"));
+        return;
+    }
+
+    if (!IsConnected()) {
+        wxLogTrace(wxT("Function Status"), wxT("CMainDocument::InitiateFinishActiveTasksAndQuit - Not connected"));
+        wxLogTrace(wxT("Function Start/End"), wxT("CMainDocument::InitiateFinishActiveTasksAndQuit - Function End"));
+        return;
+    }
+
+    int retval = ForceCacheUpdate(true);
+    if (retval) {
+        wxLogTrace(wxT("Function Status"), wxT("CMainDocument::InitiateFinishActiveTasksAndQuit - ForceCacheUpdate failed %d"), retval);
+        wxString message;
+        message.Printf(
+            _("Unable to contact client to prepare shutdown (error %d)."),
+            retval
+        );
+        wxMessageBox(message, wxGetApp().GetSkinManager()->GetAdvanced()->GetApplicationName(), wxOK | wxICON_ERROR);
+        wxLogTrace(wxT("Function Start/End"), wxT("CMainDocument::InitiateFinishActiveTasksAndQuit - Function End"));
+        return;
+    }
+
+    std::vector<FINISH_ACTIVE_TASK_DESC> tasks;
+    tasks.reserve(state.results.size());
+
+    for (unsigned int i = 0; i < state.results.size(); ++i) {
+        RESULT* rp = state.results[i];
+        if (!rp) continue;
+        bool started = !rp->is_not_started();
+        if (!started) continue;
+        FINISH_ACTIVE_TASK_DESC desc;
+        if (rp->project) {
+            desc.project_url = rp->project->master_url;
+        }
+        desc.result_name = rp->name;
+        tasks.push_back(desc);
+    }
+
+    retval = rpc.finish_active_tasks_and_quit(tasks);
+    if (retval) {
+        wxLogTrace(wxT("Function Status"), wxT("CMainDocument::InitiateFinishActiveTasksAndQuit - RPC failed %d"), retval);
+        wxString message;
+        message.Printf(
+            _("Unable to request finishing active tasks (error %d)."),
+            retval
+        );
+        wxMessageBox(message, wxGetApp().GetSkinManager()->GetAdvanced()->GetApplicationName(), wxOK | wxICON_ERROR);
+        wxLogTrace(wxT("Function Start/End"), wxT("CMainDocument::InitiateFinishActiveTasksAndQuit - Function End"));
+        return;
+    }
+
+    m_bFinishActiveTasksAndQuitPending = true;
+    wxLogTrace(wxT("Function Status"), wxT("CMainDocument::InitiateFinishActiveTasksAndQuit - Request sent with %zu tasks"), tasks.size());
+    wxLogTrace(wxT("Function Start/End"), wxT("CMainDocument::InitiateFinishActiveTasksAndQuit - Function End"));
+#else
+    wxLogTrace(wxT("Function Start/End"), wxT("CMainDocument::InitiateFinishActiveTasksAndQuit - Unsupported Platform"));
+#endif
+}
+
+bool CMainDocument::IsFinishActiveTasksAndQuitPending() {
+#ifdef __WXMSW__
+    return m_bFinishActiveTasksAndQuitPending;
+#else
+    return false;
+#endif
+}
+
+bool CMainDocument::CanInitiateFinishActiveTasksAndQuit() {
+#ifdef __WXMSW__
+    if (!IsConnected()) return false;
+    if (WaitingForRPC()) return false;
+    if (m_bFinishActiveTasksAndQuitPending) return false;
+    return true;
+#else
+    return false;
+#endif
 }
 
 

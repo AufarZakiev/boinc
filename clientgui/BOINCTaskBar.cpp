@@ -67,6 +67,9 @@ BEGIN_EVENT_TABLE(CTaskBarIcon, wxTaskBarIconEx)
     EVT_MENU(ID_TB_SUSPEND_GPU, CTaskBarIcon::OnSuspendResumeGPU)
     EVT_MENU(wxID_ABOUT, CTaskBarIcon::OnAbout)
     EVT_MENU(wxID_EXIT, CTaskBarIcon::OnExit)
+#ifdef __WXMSW__
+    EVT_MENU(ID_TB_FINISH_AND_QUIT, CTaskBarIcon::OnFinishAndQuit)
+#endif
 
 #ifdef __WXMSW__
     EVT_TASKBAR_SHUTDOWN(CTaskBarIcon::OnShutdown)
@@ -114,6 +117,12 @@ CTaskBarIcon::CTaskBarIcon(wxIconBundle* icon, wxIconBundle* iconDisconnected, w
 
     }
     m_SnoozeGPUMenuItem = NULL;
+#ifdef __WXMSW__
+    m_FinishAndQuitMenuItem = NULL;
+#endif
+#ifdef __WXMSW__
+    m_FinishAndQuitMenuItem = NULL;
+#endif
 
     m_bTaskbarInitiatedShutdown = false;
 
@@ -559,7 +568,10 @@ wxMenu *CTaskBarIcon::BuildContextMenu() {
     if (pDoc->state.have_gpu()) {
         m_SnoozeGPUMenuItem = pMenu->AppendCheckItem(ID_TB_SUSPEND_GPU, _("Snooze GPU"), wxEmptyString);
     }
-
+#ifdef __WXMSW__
+    m_FinishAndQuitMenuItem = NULL;
+    m_FinishAndQuitMenuItem = pMenu->AppendCheckItem(ID_TB_FINISH_AND_QUIT, _("Finish active tasks and quit"), wxEmptyString);
+#endif
     pMenu->AppendSeparator();
 
     menuName.Printf(
@@ -583,6 +595,21 @@ wxMenu *CTaskBarIcon::BuildContextMenu() {
     return pMenu;
 }
 
+#ifdef __WXMSW__
+void CTaskBarIcon::OnFinishAndQuit(wxCommandEvent& WXUNUSED(event)) {
+    wxLogTrace(wxT("Function Start/End"), wxT("CTaskBarIcon::OnFinishAndQuit - Function Begin"));
+
+    ResetTaskBar();
+
+    CMainDocument* pDoc = wxGetApp().GetDocument();
+    wxASSERT(pDoc);
+    wxASSERT(wxDynamicCast(pDoc, CMainDocument));
+
+    pDoc->InitiateFinishActiveTasksAndQuit();
+
+    wxLogTrace(wxT("Function Start/End"), wxT("CTaskBarIcon::OnFinishAndQuit - Function End"));
+}
+#endif
 
 void CTaskBarIcon::AdjustMenuItems(wxMenu* pMenu) {
     CC_STATUS      status;
@@ -608,6 +635,14 @@ void CTaskBarIcon::AdjustMenuItems(wxMenu* pMenu) {
     }
 
     enableSnoozeItems = (!is_dialog_detected) && pDoc->IsConnected();
+#ifdef __WXMSW__
+    if (m_FinishAndQuitMenuItem) {
+        bool finishPending = pDoc->IsFinishActiveTasksAndQuitPending();
+        m_FinishAndQuitMenuItem->Check(finishPending);
+        bool enableDrain = (!is_dialog_detected) && pDoc->CanInitiateFinishActiveTasksAndQuit();
+        m_FinishAndQuitMenuItem->Enable(enableDrain);
+    }
+#endif
 
     for (loc = 0; loc < pMenu->GetMenuItemCount(); loc++) {
         pMenuItem = pMenu->FindItemByPosition(loc);

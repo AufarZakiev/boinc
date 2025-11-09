@@ -194,6 +194,7 @@
 //
 #define ID_TB_SUSPEND                           6301
 #define ID_TB_SUSPEND_GPU                       6302
+#define ID_TB_FINISH_AND_QUIT                   6303
 
 //
 // Dialogs

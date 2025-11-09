@@ -41,6 +41,7 @@
 #include <sys/un.h>
 #endif
 #include <vector>
+#include <utility>
 #include <cstring>
 #if HAVE_NETINET_IN_H
 #include <netinet/in.h>
@@ -659,6 +660,27 @@ static void handle_get_screensaver_tasks(GUI_RPC_CONN& grc) {
     grc.mfout.printf("</handle_get_screensaver_tasks>\n");
 }
 
+static void handle_finish_active_tasks_and_quit(GUI_RPC_CONN& grc) {
+    std::vector<std::pair<std::string, std::string>> identifiers;
+    while (!grc.xp.get_tag()) {
+        if (grc.xp.match_tag("/finish_active_tasks_and_quit")) break;
+        if (grc.xp.match_tag("task")) {
+            std::string project_url;
+            std::string result_name;
+            while (!grc.xp.get_tag()) {
+                if (grc.xp.match_tag("/task")) break;
+                if (grc.xp.parse_string("project_url", project_url)) continue;
+                if (grc.xp.parse_string("result_name", result_name)) continue;
+                if (grc.xp.parse_string("name", result_name)) continue;
+            }
+            identifiers.emplace_back(project_url, result_name);
+        }
+    }
+    gstate.begin_finish_active_tasks_and_quit(identifiers);
+    gstate.set_client_state_dirty("Finish active tasks and quit RPC");
+    grc.mfout.printf("<success/>\n");
+}
+
 static void handle_quit(GUI_RPC_CONN& grc) {
     gstate.requested_exit = true;
     grc.mfout.printf("<success/>\n");
@@ -737,11 +759,16 @@ static void handle_get_cc_status(GUI_RPC_CONN& grc) {
         cc_config.simple_gui_only?1:0,
         cc_config.max_event_log_lines
     );
+    bool manager_must_quit = false;
     if (grc.au_mgr_state == AU_MGR_QUIT_REQ) {
-        grc.mfout.printf(
-            "   <manager_must_quit>1</manager_must_quit>\n"
-        );
+        manager_must_quit = true;
         grc.au_mgr_state = AU_MGR_QUIT_SENT;
+    }
+    if (gstate.finish_active_tasks_exit_pending) {
+        manager_must_quit = true;
+    }
+    if (manager_must_quit) {
+        grc.mfout.printf("   <manager_must_quit>1</manager_must_quit>\n");
     }
     grc.mfout.printf(
         "</cc_status>\n"
@@ -1848,6 +1875,8 @@ GUI_RPC gui_rpcs[] = {
     GUI_RPC("project_nomorework", handle_project_nomorework,        true,   false,  false),
     GUI_RPC("project_resume", handle_project_resume,                true,   false,  false),
     GUI_RPC("project_suspend", handle_project_suspend,              true,   false,  false),
+    GUI_RPC("finish_active_tasks_and_quit", handle_finish_active_tasks_and_quit,
+                                                                    true,   false,  false),
     GUI_RPC("quit", handle_quit,                                    true,   false,  false),
     GUI_RPC("read_cc_config", handle_read_cc_config,                true,   false,  false),
     GUI_RPC("read_global_prefs_override", handle_read_global_prefs_override,

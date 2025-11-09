@@ -74,6 +74,17 @@ CLIENT_STATE gstate;
 COPROCS coprocs;
 
 #ifndef SIM
+static std::string finish_task_key(const std::string& project_url, const char* result_name) {
+    std::string key = project_url;
+    key += '\x1f';
+    if (result_name) {
+        key += result_name;
+    }
+    return key;
+}
+#endif
+
+#ifndef SIM
 THREAD_LOCK client_thread_mutex;
 THREAD throttle_thread;
 #endif
@@ -138,6 +149,8 @@ CLIENT_STATE::CLIENT_STATE()
     network_run_mode.set(RUN_MODE_AUTO, 0);
     started_by_screensaver = false;
     requested_exit = false;
+    finish_active_tasks_and_quit_mode = false;
+    finish_active_tasks_exit_pending = false;
     os_requested_suspend = false;
     os_requested_suspend_time = 0;
     cleanup_completed = false;
@@ -1607,6 +1620,7 @@ bool CLIENT_STATE::abort_unstarted_late_jobs() {
         rp->abort_inactive(EXIT_UNSTARTED_LATE);
         action = true;
     }
+    update_finish_active_tasks_tracking();
     return action;
 }
 
@@ -2036,6 +2050,93 @@ bool CLIENT_STATE::time_to_exit() {
     }
     return false;
 }
+
+#ifndef SIM
+void CLIENT_STATE::begin_finish_active_tasks_and_quit(const std::vector<std::pair<std::string, std::string>>& identifiers) {
+    finish_active_tasks_whitelist.clear();
+    finish_active_tasks_and_quit_mode = true;
+    finish_active_tasks_exit_pending = false;
+
+    for (const auto& entry : identifiers) {
+        if (entry.second.empty()) continue;
+        finish_active_tasks_whitelist.insert(finish_task_key(entry.first, entry.second.c_str()));
+    }
+
+    for (RESULT* rp : results) {
+        if (!rp) continue;
+        if (rp->is_not_started()) continue;
+        std::string project_url;
+        if (rp->project) {
+            project_url = rp->project->master_url;
+        }
+        finish_active_tasks_whitelist.insert(finish_task_key(project_url, rp->name));
+    }
+
+    for (ACTIVE_TASK* atp : active_tasks.active_tasks) {
+        if (!atp || !atp->result) continue;
+        std::string project_url;
+        if (atp->result->project) {
+            project_url = atp->result->project->master_url;
+        }
+        finish_active_tasks_whitelist.insert(finish_task_key(project_url, atp->result->name));
+    }
+
+    if (finish_active_tasks_whitelist.empty()) {
+        msg_printf(nullptr, MSG_INFO, "No active tasks were running; exiting immediately as requested.");
+        finish_active_tasks_exit_pending = true;
+        requested_exit = true;
+        return;
+    }
+
+    msg_printf(nullptr, MSG_INFO,
+        "Will exit after %u active task%s finish.",
+        (unsigned)finish_active_tasks_whitelist.size(),
+        (finish_active_tasks_whitelist.size() == 1) ? "" : "s"
+    );
+
+    request_schedule_cpus("finish active tasks and quit");
+}
+
+bool CLIENT_STATE::finish_active_task_allowed(const RESULT& res) const {
+    if (!finish_active_tasks_and_quit_mode) return true;
+    std::string project_url;
+    if (res.project) {
+        project_url = res.project->master_url;
+    }
+    std::string key = finish_task_key(project_url, res.name);
+    return finish_active_tasks_whitelist.find(key) != finish_active_tasks_whitelist.end();
+}
+
+void CLIENT_STATE::update_finish_active_tasks_tracking() {
+    if (!finish_active_tasks_and_quit_mode || finish_active_tasks_exit_pending) return;
+
+    std::set<std::string> remaining;
+    for (RESULT* rp : results) {
+        if (!rp) continue;
+        std::string project_url;
+        if (rp->project) {
+            project_url = rp->project->master_url;
+        }
+        std::string key = finish_task_key(project_url, rp->name);
+        if (finish_active_tasks_whitelist.find(key) == finish_active_tasks_whitelist.end()) continue;
+        if (!rp->computing_done()) {
+            remaining.insert(key);
+        }
+    }
+
+    finish_active_tasks_whitelist.swap(remaining);
+
+    if (finish_active_tasks_whitelist.empty()) {
+        msg_printf(nullptr, MSG_INFO, "All tracked tasks finished; exiting as requested.");
+        finish_active_tasks_exit_pending = true;
+        requested_exit = true;
+    }
+}
+#else
+void CLIENT_STATE::begin_finish_active_tasks_and_quit(const std::vector<std::pair<std::string, std::string>>&) {}
+bool CLIENT_STATE::finish_active_task_allowed(const RESULT&) const { return true; }
+void CLIENT_STATE::update_finish_active_tasks_tracking() {}
+#endif
 
 // Call this when a result has a nonrecoverable error.
 // - back off on contacting the project's scheduler

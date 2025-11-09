@@ -28,6 +28,8 @@
 #include <vector>
 #include <ctime>
 #endif
+#include <set>
+#include <utility>
 
 using std::string;
 using std::vector;
@@ -130,6 +132,9 @@ struct CLIENT_STATE {
         // - (Win) got CTRL_LOGOFF, CTRL_C, CTRL_BREAK, etc. event
         // - (Mac) client was started from screensaver,
         //   which has since exited
+    bool finish_active_tasks_and_quit_mode;
+    bool finish_active_tasks_exit_pending;
+    std::set<std::string> finish_active_tasks_whitelist;
     bool os_requested_suspend;
         // we should suspend for OS reasonts (used on Win only).
         // Set when
@@ -288,6 +293,9 @@ struct CLIENT_STATE {
     void start_abort_sequence();
     bool abort_sequence_done();
     int quit_activities();
+    void begin_finish_active_tasks_and_quit(const std::vector<std::pair<std::string, std::string>>& identifiers);
+    bool finish_active_task_allowed(const RESULT&) const;
+    void update_finish_active_tasks_tracking();
 
     int link_app(PROJECT*, APP*);
     int link_file_info(PROJECT*, FILE_INFO*);

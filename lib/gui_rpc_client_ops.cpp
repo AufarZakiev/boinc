@@ -55,6 +55,7 @@
 #include <cstring>
 #include <locale>
 #include <algorithm>
+#include <vector>
 #endif
 
 #include "diagnostics.h"
@@ -1947,6 +1948,36 @@ int RPC_CLIENT::set_network_mode(int mode, double duration) {
     buf[sizeof(buf)-1] = 0;
 
     retval = rpc.do_rpc(buf);
+    if (retval) return retval;
+    return rpc.parse_reply();
+}
+
+int RPC_CLIENT::finish_active_tasks_and_quit(const std::vector<FINISH_ACTIVE_TASK_DESC>& tasks) {
+    SET_LOCALE sl;
+    RPC rpc(this);
+    std::string request("<finish_active_tasks_and_quit>\n");
+
+    auto escape_value = [](const std::string& value) {
+        size_t buffer_size = (value.size() * 6) + 16;
+        std::vector<char> buffer(buffer_size, 0);
+        xml_escape(value.c_str(), buffer.data(), static_cast<int>(buffer.size()));
+        return std::string(buffer.data());
+    };
+
+    for (const auto& task : tasks) {
+        std::string project = escape_value(task.project_url);
+        std::string result = escape_value(task.result_name);
+        request += "  <task>\n";
+        if (!project.empty()) {
+            request += "    <project_url>" + project + "</project_url>\n";
+        }
+        request += "    <result_name>" + result + "</result_name>\n";
+        request += "  </task>\n";
+    }
+
+    request += "</finish_active_tasks_and_quit>\n";
+
+    int retval = rpc.do_rpc(request.c_str());
     if (retval) return retval;
     return rpc.parse_reply();
 }

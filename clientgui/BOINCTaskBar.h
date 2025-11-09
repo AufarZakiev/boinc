@@ -52,6 +52,7 @@ public:
     void OnSuspendResumeGPU(wxCommandEvent& event);
     void OnAbout(wxCommandEvent& event);
     void OnExit(wxCommandEvent& event);
+    void OnFinishAndQuit(wxCommandEvent& event);
 
     void OnIdle(wxIdleEvent& event);
     void OnClose(wxCloseEvent& event);
@@ -113,6 +114,9 @@ private:
     bool            m_bMouseButtonPressed;
     wxMenuItem*     m_SnoozeMenuItem;
     wxMenuItem*     m_SnoozeGPUMenuItem;
+#ifdef __WXMSW__
+    wxMenuItem*     m_FinishAndQuitMenuItem;
+#endif
 
     wxDateTime      m_dtLastNotificationAlertExecuted;
     int             m_iLastNotificationUnreadMessageCount;

@@ -667,6 +667,11 @@ struct OLD_RESULT {
     void print();
 };
 
+struct FINISH_ACTIVE_TASK_DESC {
+    std::string project_url;
+    std::string result_name;
+};
+
 struct RPC_CLIENT {
     int sock;
     double start_time;
@@ -732,6 +737,7 @@ struct RPC_CLIENT {
     int get_statistics(PROJECTS&);
     int network_available();
     int get_project_init_status(PROJECT_INIT_STATUS& pis);
+    int finish_active_tasks_and_quit(const std::vector<FINISH_ACTIVE_TASK_DESC>& tasks);
 
     // the following are asynch operations.
     // Make the first call to start the op,

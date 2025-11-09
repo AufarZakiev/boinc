@@ -346,6 +346,11 @@ int RPCThread::ProcessRPCRequest() {
     case RPC_QUIT:
         retval = (m_pDoc->rpcClient).quit();
         break;
+    case RPC_FINISH_ACTIVE_TASKS_AND_QUIT:
+        retval = (m_pDoc->rpcClient).finish_active_tasks_and_quit(
+            *(std::vector<FINISH_ACTIVE_TASK_DESC>*)(current_request->arg1)
+        );
+        break;
     case RPC_ACCT_MGR_INFO:
         retval = (m_pDoc->rpcClient).acct_mgr_info(*(ACCT_MGR_INFO*)(current_request->arg1));
         break;

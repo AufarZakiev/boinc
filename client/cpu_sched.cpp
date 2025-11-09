@@ -146,6 +146,11 @@ struct PROC_RESOURCES {
                 atp->needs_shmem = false;
             }
         }
+        if (gstate.finish_active_tasks_and_quit_mode) {
+            if (!gstate.finish_active_task_allowed(*rp)) {
+                return false;
+            }
+        }
         if (rp->schedule_backoff > gstate.now) return false;
         if (rp->uses_gpu()) {
             if (gpu_suspend_reason) return false;

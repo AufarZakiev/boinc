@@ -18,6 +18,8 @@
 #ifndef BOINC_ASYNCRPC_H
 #define BOINC_ASYNCRPC_H
 
+#include <vector>
+
 #if defined(__GNUG__) && !defined(__APPLE__)
 #pragma interface "AsyncRPC.cpp"
 #endif
@@ -83,6 +85,7 @@ private:
 #endif
 
 class CMainDocument;    // Forward declaration
+struct FINISH_ACTIVE_TASK_DESC;
 
 enum RPC_SELECTOR {
     RPC_AUTHORIZE = 1,
@@ -109,6 +112,7 @@ enum RPC_SELECTOR {
     RPC_RESULT_OP,
     RPC_GET_HOST_INFO,
     RPC_QUIT,
+    RPC_FINISH_ACTIVE_TASKS_AND_QUIT,
     RPC_ACCT_MGR_INFO,
     RPC_GET_STATISTICS,
     RPC_NETWORK_AVAILABLE,
@@ -277,6 +281,8 @@ public:
             { return RPC_Wait(RPC_GET_HOST_INFO, (void*)&arg1); }
     int quit()
             { return RPC_Wait(RPC_QUIT); }
+    int finish_active_tasks_and_quit(const std::vector<FINISH_ACTIVE_TASK_DESC>& tasks)
+            { return RPC_Wait(RPC_FINISH_ACTIVE_TASKS_AND_QUIT, (void*)const_cast<std::vector<FINISH_ACTIVE_TASK_DESC>*>(&tasks)); }
     int acct_mgr_info(ACCT_MGR_INFO& arg1)
             { return RPC_Wait(RPC_ACCT_MGR_INFO, (void*)&arg1); }
     int get_statistics(PROJECTS& arg1)

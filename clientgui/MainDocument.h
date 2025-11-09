@@ -150,6 +150,9 @@ public:
     void                        ForceDisconnect();
     int                         FrameShutdownDetected();
     int                         CoreClientQuit();
+    void                        InitiateFinishActiveTasksAndQuit();
+    bool                        IsFinishActiveTasksAndQuitPending();
+    bool                        CanInitiateFinishActiveTasksAndQuit();
 
     int                         GetConnectedComputerName(wxString& strMachine);
     int                         GetConnectedComputerVersion(wxString& strVersion);
@@ -186,6 +189,10 @@ public:
     CC_STATUS                   async_status_buf;
     int                         m_iGet_status_rpc_result;
     wxDateTime                  m_dtCachedStateTimestamp;
+
+#ifdef __WXMSW__
+    bool                        m_bFinishActiveTasksAndQuitPending;
+#endif
 
     //
     // Async RPC support
