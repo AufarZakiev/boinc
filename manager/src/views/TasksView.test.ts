@@ -56,6 +56,7 @@ describe("TasksView", () => {
     store.tasks = [
       makeTask({ wu_name: "climate_sim_42", fraction_done: 0.75 }),
       makeTask({
+        name: "task_002_0",
         wu_name: "protein_fold_99",
         fraction_done: 0.25,
         active_task: false,
@@ -108,5 +109,50 @@ describe("TasksView", () => {
 
     const wrapper = mount(TasksView);
     expect(wrapper.text()).toContain("Ready to report");
+  });
+
+  it("shows action buttons when a task is selected", async () => {
+    const store = useTasksStore();
+    store.tasks = [makeTask()];
+
+    const wrapper = mount(TasksView);
+
+    // No actions visible initially
+    expect(wrapper.find(".actions").exists()).toBe(false);
+
+    // Click a row to select
+    await wrapper.find("tbody tr").trigger("click");
+
+    expect(wrapper.find(".actions").exists()).toBe(true);
+    expect(wrapper.text()).toContain("Suspend");
+    expect(wrapper.text()).toContain("Abort");
+  });
+
+  it("shows Resume label when all selected tasks are suspended", async () => {
+    const store = useTasksStore();
+    store.tasks = [makeTask({ suspended_via_gui: true })];
+
+    const wrapper = mount(TasksView);
+    await wrapper.find("tbody tr").trigger("click");
+
+    const actions = wrapper.find(".actions");
+    expect(actions.text()).toContain("Resume");
+  });
+
+  it("shows abort confirmation dialog", async () => {
+    const store = useTasksStore();
+    store.tasks = [makeTask()];
+
+    const wrapper = mount(TasksView);
+    await wrapper.find("tbody tr").trigger("click");
+
+    // Click abort button
+    await wrapper.find(".btn-danger").trigger("click");
+    await wrapper.vm.$nextTick();
+
+    // Dialog is teleported to body
+    const body = document.body.textContent ?? "";
+    expect(body).toContain("Abort Tasks");
+    expect(body).toContain("cannot be undone");
   });
 });

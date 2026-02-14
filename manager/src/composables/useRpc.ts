@@ -1,10 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { TaskResult, Project, CcStatus } from "../types/boinc";
+import type { TaskResult, Project, CcStatus, FileTransfer } from "../types/boinc";
 
 /**
  * Thin wrappers around Tauri invoke() calls to the Rust backend.
  * Each function maps 1:1 to a #[tauri::command] in lib.rs.
  */
+
+// ── Connection ───────────────────────────────────────────────────
 
 export async function connectLocal(dataDir: string): Promise<void> {
   return invoke("connect_local", { dataDir });
@@ -26,6 +28,8 @@ export async function getConnectionState(): Promise<string> {
   return invoke("get_connection_state");
 }
 
+// ── Read operations ──────────────────────────────────────────────
+
 export async function getResults(activeOnly: boolean): Promise<TaskResult[]> {
   return invoke("get_results", { activeOnly });
 }
@@ -36,4 +40,114 @@ export async function getProjectStatus(): Promise<Project[]> {
 
 export async function getCcStatus(): Promise<CcStatus> {
   return invoke("get_cc_status");
+}
+
+export async function getTransfers(): Promise<FileTransfer[]> {
+  return invoke("get_transfers");
+}
+
+// ── Task actions ─────────────────────────────────────────────────
+
+export async function suspendTask(
+  projectUrl: string,
+  name: string,
+): Promise<void> {
+  return invoke("suspend_task", { projectUrl, name });
+}
+
+export async function resumeTask(
+  projectUrl: string,
+  name: string,
+): Promise<void> {
+  return invoke("resume_task", { projectUrl, name });
+}
+
+export async function abortTask(
+  projectUrl: string,
+  name: string,
+): Promise<void> {
+  return invoke("abort_task", { projectUrl, name });
+}
+
+// ── Project actions ──────────────────────────────────────────────
+
+export async function suspendProject(projectUrl: string): Promise<void> {
+  return invoke("suspend_project", { projectUrl });
+}
+
+export async function resumeProject(projectUrl: string): Promise<void> {
+  return invoke("resume_project", { projectUrl });
+}
+
+export async function updateProject(projectUrl: string): Promise<void> {
+  return invoke("update_project", { projectUrl });
+}
+
+export async function noNewTasksProject(projectUrl: string): Promise<void> {
+  return invoke("no_new_tasks_project", { projectUrl });
+}
+
+export async function allowNewTasksProject(projectUrl: string): Promise<void> {
+  return invoke("allow_new_tasks_project", { projectUrl });
+}
+
+export async function resetProject(projectUrl: string): Promise<void> {
+  return invoke("reset_project", { projectUrl });
+}
+
+export async function detachProject(projectUrl: string): Promise<void> {
+  return invoke("detach_project", { projectUrl });
+}
+
+// ── Mode controls ────────────────────────────────────────────────
+
+export async function setRunMode(
+  mode: number,
+  duration: number,
+): Promise<void> {
+  return invoke("set_run_mode", { mode, duration });
+}
+
+export async function setGpuMode(
+  mode: number,
+  duration: number,
+): Promise<void> {
+  return invoke("set_gpu_mode", { mode, duration });
+}
+
+export async function setNetworkMode(
+  mode: number,
+  duration: number,
+): Promise<void> {
+  return invoke("set_network_mode", { mode, duration });
+}
+
+// ── Transfer actions ─────────────────────────────────────────────
+
+export async function retryTransfer(
+  projectUrl: string,
+  filename: string,
+): Promise<void> {
+  return invoke("retry_transfer", { projectUrl, filename });
+}
+
+export async function abortTransfer(
+  projectUrl: string,
+  filename: string,
+): Promise<void> {
+  return invoke("abort_transfer", { projectUrl, filename });
+}
+
+// ── Other ────────────────────────────────────────────────────────
+
+export async function runBenchmarks(): Promise<void> {
+  return invoke("run_benchmarks");
+}
+
+export async function retryPendingTransfers(): Promise<void> {
+  return invoke("retry_pending_transfers");
+}
+
+export async function shutdownClient(): Promise<void> {
+  return invoke("shutdown_client");
 }

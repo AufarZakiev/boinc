@@ -48,6 +48,27 @@ export interface CcStatus {
   network_status: number;
 }
 
+/** Matches Rust FileTransfer / BOINC FILE_TRANSFER struct. */
+export interface FileTransfer {
+  project_url: string;
+  project_name: string;
+  name: string;
+  nbytes: number;
+  status: number;
+  bytes_xferred: number;
+  xfer_speed: number;
+  is_upload: boolean;
+}
+
+/** BOINC run mode codes (from common_defs.h). */
+export const RUN_MODE = {
+  ALWAYS: 1,
+  AUTO: 2,
+  NEVER: 3,
+} as const;
+
+export type RunMode = (typeof RUN_MODE)[keyof typeof RUN_MODE];
+
 export type ConnectionState =
   | "Disconnected"
   | "Connecting"

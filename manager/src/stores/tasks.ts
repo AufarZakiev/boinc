@@ -1,7 +1,12 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import type { TaskResult } from "../types/boinc";
-import { getResults } from "../composables/useRpc";
+import {
+  getResults,
+  suspendTask as rpcSuspendTask,
+  resumeTask as rpcResumeTask,
+  abortTask as rpcAbortTask,
+} from "../composables/useRpc";
 
 export const useTasksStore = defineStore("tasks", () => {
   const tasks = ref<TaskResult[]>([]);
@@ -35,5 +40,30 @@ export const useTasksStore = defineStore("tasks", () => {
     }
   }
 
-  return { tasks, loading, error, fetchTasks, startPolling, stopPolling };
+  async function suspendTask(projectUrl: string, name: string) {
+    await rpcSuspendTask(projectUrl, name);
+    await fetchTasks();
+  }
+
+  async function resumeTask(projectUrl: string, name: string) {
+    await rpcResumeTask(projectUrl, name);
+    await fetchTasks();
+  }
+
+  async function abortTask(projectUrl: string, name: string) {
+    await rpcAbortTask(projectUrl, name);
+    await fetchTasks();
+  }
+
+  return {
+    tasks,
+    loading,
+    error,
+    fetchTasks,
+    startPolling,
+    stopPolling,
+    suspendTask,
+    resumeTask,
+    abortTask,
+  };
 });

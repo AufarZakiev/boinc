@@ -53,6 +53,19 @@ pub struct CcStatus {
     pub network_status: i32,
 }
 
+/// Matches BOINC's FILE_TRANSFER struct.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct FileTransfer {
+    pub project_url: String,
+    pub project_name: String,
+    pub name: String,
+    pub nbytes: f64,
+    pub status: i32,
+    pub bytes_xferred: f64,
+    pub xfer_speed: f64,
+    pub is_upload: bool,
+}
+
 /// State of the RPC connection.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub enum ConnectionState {

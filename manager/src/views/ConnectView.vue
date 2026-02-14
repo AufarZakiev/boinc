@@ -2,10 +2,16 @@
 import { ref } from "vue";
 import { useConnectionStore } from "../stores/connection";
 import { useTasksStore } from "../stores/tasks";
+import { useProjectsStore } from "../stores/projects";
+import { useTransfersStore } from "../stores/transfers";
+import { useClientStore } from "../stores/client";
 import { useRouter } from "vue-router";
 
 const connection = useConnectionStore();
 const tasks = useTasksStore();
+const projects = useProjectsStore();
+const transfers = useTransfersStore();
+const client = useClientStore();
 const router = useRouter();
 
 const dataDir = ref(defaultDataDir());
@@ -26,6 +32,9 @@ async function handleConnect() {
 
   if (connection.state === "Connected") {
     tasks.startPolling();
+    projects.startPolling();
+    transfers.startPolling();
+    client.startPolling();
     router.push("/tasks");
   }
 }

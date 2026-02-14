@@ -1,9 +1,11 @@
 use super::connection::RpcClient;
-use super::types::{CcStatus, Project, TaskResult};
+use super::types::{CcStatus, FileTransfer, Project, TaskResult};
 use super::xml_parse;
 
 /// High-level RPC commands that return typed data.
 impl RpcClient {
+    // ── Read operations ──────────────────────────────────────────────
+
     /// Get all results (tasks). If `active_only` is true, only active tasks are returned.
     pub async fn get_results(&self, active_only: bool) -> Result<Vec<TaskResult>, String> {
         let req = if active_only {
@@ -25,5 +27,132 @@ impl RpcClient {
     pub async fn get_cc_status(&self) -> Result<CcStatus, String> {
         let xml = self.rpc_call("<get_cc_status/>").await?;
         Ok(xml_parse::parse_cc_status(&xml))
+    }
+
+    /// Get all active file transfers.
+    pub async fn get_file_transfers(&self) -> Result<Vec<FileTransfer>, String> {
+        let xml = self.rpc_call("<get_file_transfers/>").await?;
+        Ok(xml_parse::parse_file_transfers(&xml))
+    }
+
+    // ── Task (result) operations ─────────────────────────────────────
+
+    /// Send a task operation identified by project URL and result name.
+    async fn result_op(&self, op: &str, project_url: &str, name: &str) -> Result<(), String> {
+        let req = format!(
+            "<{op}>\n<project_url>{project_url}</project_url>\n<name>{name}</name>\n</{op}>"
+        );
+        let xml = self.rpc_call(&req).await?;
+        xml_parse::parse_success(&xml)
+    }
+
+    pub async fn suspend_result(&self, project_url: &str, name: &str) -> Result<(), String> {
+        self.result_op("suspend_result", project_url, name).await
+    }
+
+    pub async fn resume_result(&self, project_url: &str, name: &str) -> Result<(), String> {
+        self.result_op("resume_result", project_url, name).await
+    }
+
+    pub async fn abort_result(&self, project_url: &str, name: &str) -> Result<(), String> {
+        self.result_op("abort_result", project_url, name).await
+    }
+
+    // ── Project operations ───────────────────────────────────────────
+
+    /// Send a project operation identified by master URL.
+    async fn project_op(&self, op: &str, project_url: &str) -> Result<(), String> {
+        let req = format!(
+            "<{op}>\n<project_url>{project_url}</project_url>\n</{op}>"
+        );
+        let xml = self.rpc_call(&req).await?;
+        xml_parse::parse_success(&xml)
+    }
+
+    pub async fn project_suspend(&self, project_url: &str) -> Result<(), String> {
+        self.project_op("project_suspend", project_url).await
+    }
+
+    pub async fn project_resume(&self, project_url: &str) -> Result<(), String> {
+        self.project_op("project_resume", project_url).await
+    }
+
+    pub async fn project_update(&self, project_url: &str) -> Result<(), String> {
+        self.project_op("project_update", project_url).await
+    }
+
+    pub async fn project_nomorework(&self, project_url: &str) -> Result<(), String> {
+        self.project_op("project_nomorework", project_url).await
+    }
+
+    pub async fn project_allowmorework(&self, project_url: &str) -> Result<(), String> {
+        self.project_op("project_allowmorework", project_url).await
+    }
+
+    pub async fn project_reset(&self, project_url: &str) -> Result<(), String> {
+        self.project_op("project_reset", project_url).await
+    }
+
+    pub async fn project_detach(&self, project_url: &str) -> Result<(), String> {
+        self.project_op("project_detach", project_url).await
+    }
+
+    // ── Mode controls ────────────────────────────────────────────────
+
+    /// Set a run mode. `mode`: 1=always, 2=auto, 3=never. `duration`: seconds (0=permanent).
+    async fn set_mode(&self, tag: &str, mode: i32, duration: f64) -> Result<(), String> {
+        let req = format!(
+            "<set_{tag}>\n<{tag}>{mode}</{tag}>\n<duration>{duration}</duration>\n</set_{tag}>"
+        );
+        let xml = self.rpc_call(&req).await?;
+        xml_parse::parse_success(&xml)
+    }
+
+    pub async fn set_run_mode(&self, mode: i32, duration: f64) -> Result<(), String> {
+        self.set_mode("run_mode", mode, duration).await
+    }
+
+    pub async fn set_gpu_mode(&self, mode: i32, duration: f64) -> Result<(), String> {
+        self.set_mode("gpu_mode", mode, duration).await
+    }
+
+    pub async fn set_network_mode(&self, mode: i32, duration: f64) -> Result<(), String> {
+        self.set_mode("network_mode", mode, duration).await
+    }
+
+    // ── Transfer operations ──────────────────────────────────────────
+
+    /// Send a file transfer operation identified by project URL and filename.
+    async fn transfer_op(&self, op: &str, project_url: &str, filename: &str) -> Result<(), String> {
+        let req = format!(
+            "<{op}>\n<project_url>{project_url}</project_url>\n<filename>{filename}</filename>\n</{op}>"
+        );
+        let xml = self.rpc_call(&req).await?;
+        xml_parse::parse_success(&xml)
+    }
+
+    pub async fn retry_file_transfer(&self, project_url: &str, filename: &str) -> Result<(), String> {
+        self.transfer_op("retry_file_transfer", project_url, filename).await
+    }
+
+    pub async fn abort_file_transfer(&self, project_url: &str, filename: &str) -> Result<(), String> {
+        self.transfer_op("abort_file_transfer", project_url, filename).await
+    }
+
+    // ── Other operations ─────────────────────────────────────────────
+
+    pub async fn run_benchmarks(&self) -> Result<(), String> {
+        let xml = self.rpc_call("<run_benchmarks/>").await?;
+        xml_parse::parse_success(&xml)
+    }
+
+    pub async fn network_available(&self) -> Result<(), String> {
+        let xml = self.rpc_call("<network_available/>").await?;
+        xml_parse::parse_success(&xml)
+    }
+
+    pub async fn quit(&self) -> Result<(), String> {
+        let xml = self.rpc_call("<quit/>").await?;
+        xml_parse::parse_success(&xml)
     }
 }

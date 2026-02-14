@@ -1,6 +1,6 @@
 mod rpc;
 
-use rpc::{CcStatus, ConnectionState, Project, RpcClient, TaskResult};
+use rpc::{CcStatus, ConnectionState, FileTransfer, Project, RpcClient, TaskResult};
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
@@ -78,6 +78,202 @@ async fn get_cc_status(state: State<'_, AppState>) -> Result<CcStatus, String> {
     client.get_cc_status().await
 }
 
+#[tauri::command]
+async fn get_transfers(state: State<'_, AppState>) -> Result<Vec<FileTransfer>, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_file_transfers().await
+}
+
+// ── Task actions ─────────────────────────────────────────────────
+
+#[tauri::command]
+async fn suspend_task(
+    state: State<'_, AppState>,
+    project_url: String,
+    name: String,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.suspend_result(&project_url, &name).await
+}
+
+#[tauri::command]
+async fn resume_task(
+    state: State<'_, AppState>,
+    project_url: String,
+    name: String,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.resume_result(&project_url, &name).await
+}
+
+#[tauri::command]
+async fn abort_task(
+    state: State<'_, AppState>,
+    project_url: String,
+    name: String,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.abort_result(&project_url, &name).await
+}
+
+// ── Project actions ──────────────────────────────────────────────
+
+#[tauri::command]
+async fn suspend_project(
+    state: State<'_, AppState>,
+    project_url: String,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.project_suspend(&project_url).await
+}
+
+#[tauri::command]
+async fn resume_project(
+    state: State<'_, AppState>,
+    project_url: String,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.project_resume(&project_url).await
+}
+
+#[tauri::command]
+async fn update_project(
+    state: State<'_, AppState>,
+    project_url: String,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.project_update(&project_url).await
+}
+
+#[tauri::command]
+async fn no_new_tasks_project(
+    state: State<'_, AppState>,
+    project_url: String,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.project_nomorework(&project_url).await
+}
+
+#[tauri::command]
+async fn allow_new_tasks_project(
+    state: State<'_, AppState>,
+    project_url: String,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.project_allowmorework(&project_url).await
+}
+
+#[tauri::command]
+async fn reset_project(
+    state: State<'_, AppState>,
+    project_url: String,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.project_reset(&project_url).await
+}
+
+#[tauri::command]
+async fn detach_project(
+    state: State<'_, AppState>,
+    project_url: String,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.project_detach(&project_url).await
+}
+
+// ── Mode controls ────────────────────────────────────────────────
+
+#[tauri::command]
+async fn set_run_mode(
+    state: State<'_, AppState>,
+    mode: i32,
+    duration: f64,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.set_run_mode(mode, duration).await
+}
+
+#[tauri::command]
+async fn set_gpu_mode(
+    state: State<'_, AppState>,
+    mode: i32,
+    duration: f64,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.set_gpu_mode(mode, duration).await
+}
+
+#[tauri::command]
+async fn set_network_mode(
+    state: State<'_, AppState>,
+    mode: i32,
+    duration: f64,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.set_network_mode(mode, duration).await
+}
+
+// ── Transfer actions ─────────────────────────────────────────────
+
+#[tauri::command]
+async fn retry_transfer(
+    state: State<'_, AppState>,
+    project_url: String,
+    filename: String,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.retry_file_transfer(&project_url, &filename).await
+}
+
+#[tauri::command]
+async fn abort_transfer(
+    state: State<'_, AppState>,
+    project_url: String,
+    filename: String,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.abort_file_transfer(&project_url, &filename).await
+}
+
+// ── Other ────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn run_benchmarks(state: State<'_, AppState>) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.run_benchmarks().await
+}
+
+#[tauri::command]
+async fn retry_pending_transfers(state: State<'_, AppState>) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.network_available().await
+}
+
+#[tauri::command]
+async fn shutdown_client(state: State<'_, AppState>) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.quit().await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -93,6 +289,25 @@ pub fn run() {
             get_results,
             get_project_status,
             get_cc_status,
+            get_transfers,
+            suspend_task,
+            resume_task,
+            abort_task,
+            suspend_project,
+            resume_project,
+            update_project,
+            no_new_tasks_project,
+            allow_new_tasks_project,
+            reset_project,
+            detach_project,
+            set_run_mode,
+            set_gpu_mode,
+            set_network_mode,
+            retry_transfer,
+            abort_transfer,
+            run_benchmarks,
+            retry_pending_transfers,
+            shutdown_client,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

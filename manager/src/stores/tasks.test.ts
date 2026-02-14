@@ -108,4 +108,47 @@ describe("useTasksStore", () => {
     store.stopPolling(); // should not throw
     store.stopPolling();
   });
+
+  it("suspendTask calls correct RPC and refreshes", async () => {
+    // First call: suspend_task, second call: get_results (refresh)
+    mockInvoke.mockResolvedValueOnce(undefined);
+    mockInvoke.mockResolvedValueOnce([makeTask({ suspended_via_gui: true })]);
+
+    const store = useTasksStore();
+    await store.suspendTask("https://example.com/", "task_001_0");
+
+    expect(mockInvoke).toHaveBeenCalledWith("suspend_task", {
+      projectUrl: "https://example.com/",
+      name: "task_001_0",
+    });
+    expect(mockInvoke).toHaveBeenCalledWith("get_results", {
+      activeOnly: false,
+    });
+  });
+
+  it("resumeTask calls correct RPC and refreshes", async () => {
+    mockInvoke.mockResolvedValueOnce(undefined);
+    mockInvoke.mockResolvedValueOnce([makeTask()]);
+
+    const store = useTasksStore();
+    await store.resumeTask("https://example.com/", "task_001_0");
+
+    expect(mockInvoke).toHaveBeenCalledWith("resume_task", {
+      projectUrl: "https://example.com/",
+      name: "task_001_0",
+    });
+  });
+
+  it("abortTask calls correct RPC and refreshes", async () => {
+    mockInvoke.mockResolvedValueOnce(undefined);
+    mockInvoke.mockResolvedValueOnce([]);
+
+    const store = useTasksStore();
+    await store.abortTask("https://example.com/", "task_001_0");
+
+    expect(mockInvoke).toHaveBeenCalledWith("abort_task", {
+      projectUrl: "https://example.com/",
+      name: "task_001_0",
+    });
+  });
 });

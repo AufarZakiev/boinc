@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
+    "dev:full": "powershell -ExecutionPolicy Bypass -File dev.ps1",
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest",
