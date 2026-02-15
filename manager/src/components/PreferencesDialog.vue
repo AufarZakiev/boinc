@@ -2,13 +2,19 @@
 import { ref, watch } from "vue";
 import { usePreferencesStore } from "../stores/preferences";
 import type { GlobalPreferences } from "../types/boinc";
+import ProxySettingsDialog from "./ProxySettingsDialog.vue";
+import ExclusiveAppsDialog from "./ExclusiveAppsDialog.vue";
+import LogFlagsDialog from "./LogFlagsDialog.vue";
 
 const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ close: [] }>();
 
 const store = usePreferencesStore();
-const activeTab = ref<"computing" | "network" | "storage">("computing");
+const activeTab = ref<"computing" | "network" | "storage" | "schedule" | "advanced">("computing");
 const form = ref<GlobalPreferences | null>(null);
+const showProxy = ref(false);
+const showExclusiveApps = ref(false);
+const showLogFlags = ref(false);
 
 watch(
   () => props.open,
@@ -21,6 +27,19 @@ watch(
     }
   },
 );
+
+const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+function getDayPref(dayOfWeek: number) {
+  if (!form.value) return { day_of_week: dayOfWeek, start_hour: 0, end_hour: 0, net_start_hour: 0, net_end_hour: 0 };
+  if (!form.value.day_prefs) form.value.day_prefs = [];
+  let dp = form.value.day_prefs.find((d) => d.day_of_week === dayOfWeek);
+  if (!dp) {
+    dp = { day_of_week: dayOfWeek, start_hour: 0, end_hour: 0, net_start_hour: 0, net_end_hour: 0 };
+    form.value.day_prefs.push(dp);
+  }
+  return dp;
+}
 
 async function save() {
   if (!form.value) return;
@@ -65,6 +84,8 @@ async function save() {
             >
               Storage
             </button>
+            <button class="tab" :class="{ active: activeTab === 'schedule' }" @click="activeTab = 'schedule'">Schedule</button>
+            <button class="tab" :class="{ active: activeTab === 'advanced' }" @click="activeTab = 'advanced'">Advanced</button>
           </div>
 
           <div class="prefs-body">
@@ -146,6 +167,26 @@ async function save() {
                   max="24"
                   step="0.5"
                 />
+              </label>
+              <label class="pref-row">
+                <span>Suspend if no recent input (min)</span>
+                <input v-model.number="form.suspend_if_no_recent_input" type="number" min="0" step="1" />
+              </label>
+              <label class="pref-row">
+                <span>Suspend if CPU usage above (%)</span>
+                <input v-model.number="form.suspend_cpu_usage" type="number" min="0" max="100" step="1" />
+              </label>
+              <label class="pref-row">
+                <span>Leave apps in memory</span>
+                <input v-model="form.leave_apps_in_memory" type="checkbox" />
+              </label>
+              <label class="pref-row">
+                <span>Additional work buffer (days)</span>
+                <input v-model.number="form.work_buf_additional_days" type="number" min="0" step="0.1" />
+              </label>
+              <label class="pref-row">
+                <span>CPU scheduling period (min)</span>
+                <input v-model.number="form.cpu_scheduling_period_minutes" type="number" min="1" step="1" />
               </label>
             </div>
 
@@ -240,6 +281,40 @@ async function save() {
                 />
               </label>
             </div>
+
+            <!-- Schedule tab -->
+            <div v-if="activeTab === 'schedule'" class="prefs-section">
+              <p class="section-desc">Set per-day computing and network hours (0-24). Leave at 0-0 to use the default hours above.</p>
+              <table class="schedule-table">
+                <thead>
+                  <tr>
+                    <th>Day</th>
+                    <th>CPU Start</th>
+                    <th>CPU End</th>
+                    <th>Net Start</th>
+                    <th>Net End</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(day, i) in dayNames" :key="i">
+                    <td class="day-label">{{ day }}</td>
+                    <td><input v-model.number="getDayPref(i).start_hour" type="number" min="0" max="24" step="0.5" class="schedule-input" /></td>
+                    <td><input v-model.number="getDayPref(i).end_hour" type="number" min="0" max="24" step="0.5" class="schedule-input" /></td>
+                    <td><input v-model.number="getDayPref(i).net_start_hour" type="number" min="0" max="24" step="0.5" class="schedule-input" /></td>
+                    <td><input v-model.number="getDayPref(i).net_end_hour" type="number" min="0" max="24" step="0.5" class="schedule-input" /></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Advanced tab -->
+            <div v-if="activeTab === 'advanced'" class="prefs-section">
+              <div class="advanced-group">
+                <button class="btn" @click="showProxy = true">Proxy Settings...</button>
+                <button class="btn" @click="showExclusiveApps = true">Exclusive Applications...</button>
+                <button class="btn" @click="showLogFlags = true">Log Flags &amp; Config...</button>
+              </div>
+            </div>
           </div>
 
           <div v-if="store.error" class="prefs-error">{{ store.error }}</div>
@@ -253,6 +328,9 @@ async function save() {
         </template>
       </div>
     </div>
+    <ProxySettingsDialog :open="showProxy" @close="showProxy = false" />
+    <ExclusiveAppsDialog :open="showExclusiveApps" @close="showExclusiveApps = false" />
+    <LogFlagsDialog :open="showLogFlags" @close="showLogFlags = false" />
   </Teleport>
 </template>
 
@@ -395,5 +473,56 @@ async function save() {
   justify-content: flex-end;
   padding: 16px 20px;
   border-top: 1px solid var(--color-border);
+}
+
+.section-desc {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-md);
+  line-height: 1.5;
+}
+
+.schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.schedule-table th {
+  text-align: left;
+  padding: 6px 4px;
+  font-weight: 600;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.schedule-table td {
+  padding: 4px;
+}
+
+.day-label {
+  font-weight: 500;
+  padding-right: 8px;
+}
+
+.schedule-input {
+  width: 60px;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  text-align: right;
+}
+
+.advanced-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.advanced-group .btn {
+  text-align: left;
 }
 </style>

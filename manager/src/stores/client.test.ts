@@ -23,6 +23,9 @@ function makeStatus(overrides: Partial<CcStatus> = {}): CcStatus {
     network_mode_perm: 2,
     network_mode_delay: 0,
     network_status: 0,
+    task_suspend_reason: 0,
+    gpu_suspend_reason: 0,
+    network_suspend_reason: 0,
     ...overrides,
   };
 }

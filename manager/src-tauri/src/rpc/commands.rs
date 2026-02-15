@@ -1,7 +1,8 @@
 use super::connection::RpcClient;
 use super::types::{
-    AccountOut, CcStatus, DiskUsage, FileTransfer, GlobalPreferences, HostInfo, Message, Notice,
-    Project, ProjectAttachReply, ProjectListEntry, ProjectStatistics, TaskResult,
+    AccountOut, AcctMgrInfo, AcctMgrRpcReply, CcConfig, CcStatus, DiskUsage, FileTransfer,
+    GlobalPreferences, HostInfo, Message, NewerVersionInfo, Notice, Project, ProjectAttachReply,
+    ProjectConfig, ProjectListEntry, ProjectStatistics, ProxyInfo, TaskResult,
 };
 use super::xml_parse;
 
@@ -209,7 +210,6 @@ impl RpcClient {
             "<set_global_prefs_override>\n{prefs_xml}\n</set_global_prefs_override>"
         );
         self.rpc_call(&req).await?;
-        // Tell the client to re-read the override file
         let xml = self.rpc_call("<read_global_prefs_override/>").await?;
         xml_parse::parse_success(&xml)
     }
@@ -270,5 +270,113 @@ impl RpcClient {
     pub async fn project_attach_poll(&self) -> Result<ProjectAttachReply, String> {
         let xml = self.rpc_call("<project_attach_poll/>").await?;
         Ok(xml_parse::parse_project_attach_reply(&xml))
+    }
+
+    // ── Project config (Phase 4) ──────────────────────────────────
+
+    pub async fn get_project_config(&self, url: &str) -> Result<(), String> {
+        let req = format!("<get_project_config>\n<url>{url}</url>\n</get_project_config>");
+        self.rpc_call(&req).await?;
+        Ok(())
+    }
+
+    pub async fn get_project_config_poll(&self) -> Result<ProjectConfig, String> {
+        let xml = self.rpc_call("<get_project_config_poll/>").await?;
+        Ok(xml_parse::parse_project_config(&xml))
+    }
+
+    pub async fn create_account(
+        &self,
+        url: &str,
+        email: &str,
+        passwd_hash: &str,
+        user_name: &str,
+        team_name: &str,
+    ) -> Result<(), String> {
+        let req = format!(
+            "<create_account>\n\
+             <url>{url}</url>\n\
+             <email_addr>{email}</email_addr>\n\
+             <passwd_hash>{passwd_hash}</passwd_hash>\n\
+             <user_name>{user_name}</user_name>\n\
+             <team_name>{team_name}</team_name>\n\
+             </create_account>"
+        );
+        self.rpc_call(&req).await?;
+        Ok(())
+    }
+
+    pub async fn create_account_poll(&self) -> Result<AccountOut, String> {
+        let xml = self.rpc_call("<create_account_poll/>").await?;
+        Ok(xml_parse::parse_account_out(&xml))
+    }
+
+    // ── Account manager (Phase 4) ────────────────────────────────
+
+    pub async fn acct_mgr_info(&self) -> Result<AcctMgrInfo, String> {
+        let xml = self.rpc_call("<acct_mgr_info/>").await?;
+        Ok(xml_parse::parse_acct_mgr_info(&xml))
+    }
+
+    pub async fn acct_mgr_rpc(
+        &self,
+        url: &str,
+        name: &str,
+        password: &str,
+    ) -> Result<(), String> {
+        let req = format!(
+            "<acct_mgr_rpc>\n\
+             <url>{url}</url>\n\
+             <name>{name}</name>\n\
+             <password>{password}</password>\n\
+             </acct_mgr_rpc>"
+        );
+        self.rpc_call(&req).await?;
+        Ok(())
+    }
+
+    pub async fn acct_mgr_rpc_poll(&self) -> Result<AcctMgrRpcReply, String> {
+        let xml = self.rpc_call("<acct_mgr_rpc_poll/>").await?;
+        Ok(xml_parse::parse_acct_mgr_rpc_reply(&xml))
+    }
+
+    // ── Proxy settings (Phase 5) ─────────────────────────────────
+
+    pub async fn get_proxy_settings(&self) -> Result<ProxyInfo, String> {
+        let xml = self.rpc_call("<get_proxy_settings/>").await?;
+        Ok(xml_parse::parse_proxy_info(&xml))
+    }
+
+    pub async fn set_proxy_settings(&self, info: &ProxyInfo) -> Result<(), String> {
+        let proxy_xml = xml_parse::serialize_proxy_info(info);
+        let req = format!(
+            "<set_proxy_settings>\n{proxy_xml}\n</set_proxy_settings>"
+        );
+        let xml = self.rpc_call(&req).await?;
+        xml_parse::parse_success(&xml)
+    }
+
+    // ── CC Config (Phase 5) ──────────────────────────────────────
+
+    pub async fn get_cc_config(&self) -> Result<CcConfig, String> {
+        let xml = self.rpc_call("<get_cc_config/>").await?;
+        Ok(xml_parse::parse_cc_config(&xml))
+    }
+
+    pub async fn set_cc_config(&self, config: &CcConfig) -> Result<(), String> {
+        let config_xml = xml_parse::serialize_cc_config(config);
+        let req = format!(
+            "<set_cc_config>\n{config_xml}\n</set_cc_config>"
+        );
+        self.rpc_call(&req).await?;
+        let xml = self.rpc_call("<read_cc_config/>").await?;
+        xml_parse::parse_success(&xml)
+    }
+
+    // ── Version check (Phase 6) ──────────────────────────────────
+
+    pub async fn get_newer_version(&self) -> Result<NewerVersionInfo, String> {
+        let xml = self.rpc_call("<get_newer_version/>").await?;
+        Ok(xml_parse::parse_newer_version(&xml))
     }
 }

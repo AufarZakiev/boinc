@@ -18,9 +18,29 @@ export interface TaskResult {
   got_server_ack: boolean;
   plan_class: string;
   resources: string;
+  // Extended fields (Phase 2)
+  version_num: number;
+  slot: number;
+  pid: number;
+  checkpoint_cpu_time: number;
+  current_cpu_time: number;
+  progress_rate: number;
+  working_set_size_smoothed: number;
+  swap_size: number;
+  slot_path: string;
+  graphics_exec_path: string;
+  web_graphics_url: string;
+  remote_desktop_addr: string;
 }
 
-/** Matches Rust Project / BOINC PROJECT struct (subset). */
+/** A GUI URL associated with a project. */
+export interface GuiUrl {
+  name: string;
+  description: string;
+  url: string;
+}
+
+/** Matches Rust Project / BOINC PROJECT struct. */
 export interface Project {
   master_url: string;
   project_name: string;
@@ -32,6 +52,21 @@ export interface Project {
   host_expavg_credit: number;
   suspended_via_gui: boolean;
   dont_request_more_work: boolean;
+  // Extended fields (Phase 2)
+  resource_share: number;
+  hostid: number;
+  disk_usage: number;
+  nrpc_failures: number;
+  min_rpc_time: number;
+  download_backoff: number;
+  upload_backoff: number;
+  sched_priority: number;
+  duration_correction_factor: number;
+  last_rpc_time: number;
+  njobs_success: number;
+  njobs_error: number;
+  venue: string;
+  gui_urls: GuiUrl[];
 }
 
 /** Matches Rust CcStatus / BOINC CC_STATUS struct. */
@@ -46,6 +81,10 @@ export interface CcStatus {
   network_mode_perm: number;
   network_mode_delay: number;
   network_status: number;
+  // Suspend reasons (Phase 3)
+  task_suspend_reason: number;
+  gpu_suspend_reason: number;
+  network_suspend_reason: number;
 }
 
 /** Matches Rust FileTransfer / BOINC FILE_TRANSFER struct. */
@@ -103,6 +142,23 @@ export const SCHEDULER_STATE = {
   UNINITIALIZED: 0,
   PREEMPTED: 1,
   SCHEDULED: 2,
+} as const;
+
+/** Suspend reason bitmask values (from common_defs.h). */
+export const SUSPEND_REASON = {
+  BATTERIES: 1,
+  USER_ACTIVE: 2,
+  USER_REQ: 4,
+  TIME_OF_DAY: 8,
+  BENCHMARKS: 16,
+  DISK_SIZE: 32,
+  CPU_THROTTLE: 64,
+  NO_RECENT_INPUT: 128,
+  INITIAL_DELAY: 256,
+  EXCLUSIVE_APP: 512,
+  CPU_USAGE: 1024,
+  NETWORK_QUOTA: 2048,
+  OS: 4096,
 } as const;
 
 /** A single day's statistics for a project. */
@@ -163,6 +219,15 @@ export interface DiskUsage {
   d_allowed: number;
 }
 
+/** Per-day-of-week preferences. */
+export interface DayOfWeekPrefs {
+  day_of_week: number;
+  start_hour: number;
+  end_hour: number;
+  net_start_hour: number;
+  net_end_hour: number;
+}
+
 /** Global preferences. */
 export interface GlobalPreferences {
   run_on_batteries: boolean;
@@ -184,6 +249,12 @@ export interface GlobalPreferences {
   end_hour: number;
   net_start_hour: number;
   net_end_hour: number;
+  // Enhanced preferences (Phase 5)
+  suspend_if_no_recent_input: number;
+  suspend_cpu_usage: number;
+  leave_apps_in_memory: boolean;
+  work_buf_additional_days: number;
+  day_prefs: DayOfWeekPrefs[];
 }
 
 /** Host information. */
@@ -228,4 +299,81 @@ export interface AccountOut {
 export interface ProjectAttachReply {
   error_num: number;
   messages: string[];
+}
+
+/** Project configuration (Phase 4). */
+export interface ProjectConfig {
+  error_num: number;
+  name: string;
+  master_url: string;
+  min_passwd_length: number;
+  account_creation_disabled: boolean;
+  client_account_creation_disabled: boolean;
+  uses_username: boolean;
+  terms_of_use: string;
+  terms_of_use_is_html: boolean;
+  ldap_auth: boolean;
+  platforms: string[];
+  sched_stopped: boolean;
+  web_stopped: boolean;
+}
+
+/** Account manager info (Phase 4). */
+export interface AcctMgrInfo {
+  acct_mgr_name: string;
+  acct_mgr_url: string;
+  have_credentials: boolean;
+}
+
+/** Account manager RPC reply (Phase 4). */
+export interface AcctMgrRpcReply {
+  error_num: number;
+  messages: string[];
+}
+
+/** Proxy settings (Phase 5). */
+export interface ProxyInfo {
+  use_http_proxy: boolean;
+  http_server_name: string;
+  http_server_port: number;
+  http_user_name: string;
+  http_user_passwd: string;
+  use_http_auth: boolean;
+  use_socks_proxy: boolean;
+  socks_server_name: string;
+  socks_server_port: number;
+  socks5_user_name: string;
+  socks5_user_passwd: string;
+  socks5_remote_dns: boolean;
+  noproxy_hosts: string;
+}
+
+/** Log flags (Phase 5). */
+export interface LogFlags {
+  task: boolean;
+  file_xfer: boolean;
+  sched_ops: boolean;
+  cpu_sched: boolean;
+  network_xfer: boolean;
+  mem_usage: boolean;
+  disk_usage: boolean;
+  http_debug: boolean;
+  state_debug: boolean;
+  statefile_debug: boolean;
+}
+
+/** CC Config (Phase 5). */
+export interface CcConfig {
+  exclusive_apps: string[];
+  exclusive_gpu_apps: string[];
+  log_flags: LogFlags;
+  max_file_xfers: number;
+  max_ncpus: number;
+  report_results_immediately: boolean;
+}
+
+/** Newer version info (Phase 6). */
+export interface NewerVersionInfo {
+  newer_version: string;
+  download_url: string;
 }

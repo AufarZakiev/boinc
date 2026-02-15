@@ -29,6 +29,18 @@ function makeTask(overrides: Partial<TaskResult> = {}): TaskResult {
     got_server_ack: false,
     plan_class: "",
     resources: "1 CPU",
+    version_num: 0,
+    slot: -1,
+    pid: 0,
+    checkpoint_cpu_time: 0,
+    current_cpu_time: 0,
+    progress_rate: 0,
+    working_set_size_smoothed: 0,
+    swap_size: 0,
+    slot_path: "",
+    graphics_exec_path: "",
+    web_graphics_url: "",
+    remote_desktop_addr: "",
     ...overrides,
   };
 }

@@ -22,6 +22,9 @@ const defaultStatus: CcStatus = {
   network_mode_perm: 0,
   network_mode_delay: 0,
   network_status: 0,
+  task_suspend_reason: 0,
+  gpu_suspend_reason: 0,
+  network_suspend_reason: 0,
 };
 
 export const useClientStore = defineStore("client", () => {

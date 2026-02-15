@@ -1,8 +1,9 @@
 mod rpc;
 
 use rpc::{
-    AccountOut, CcStatus, ConnectionState, DiskUsage, FileTransfer, GlobalPreferences, HostInfo,
-    Message, Notice, Project, ProjectAttachReply, ProjectListEntry, ProjectStatistics, RpcClient,
+    AccountOut, AcctMgrInfo, AcctMgrRpcReply, CcConfig, CcStatus, ConnectionState, DiskUsage,
+    FileTransfer, GlobalPreferences, HostInfo, Message, NewerVersionInfo, Notice, Project,
+    ProjectAttachReply, ProjectConfig, ProjectListEntry, ProjectStatistics, ProxyInfo, RpcClient,
     TaskResult,
 };
 use std::sync::Arc;
@@ -12,6 +13,17 @@ use tokio::sync::Mutex;
 struct AppState {
     client: Arc<Mutex<Option<RpcClient>>>,
 }
+
+/// Helper macro to reduce boilerplate for commands that just get the client and call a method.
+macro_rules! with_client {
+    ($state:expr) => {{
+        let guard = $state.client.lock().await;
+        guard.as_ref().ok_or("Not connected".to_string())?.clone()
+    }};
+}
+
+// We need RpcClient to be cloneable for the macro. Since it's behind Arc<Mutex>,
+// we just use the guard pattern directly.
 
 #[tauri::command]
 async fn connect(
@@ -405,6 +417,156 @@ async fn project_attach_poll(
     client.project_attach_poll().await
 }
 
+// ── Project config (Phase 4) ────────────────────────────────────
+
+#[tauri::command]
+async fn get_project_config(
+    state: State<'_, AppState>,
+    url: String,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_project_config(&url).await
+}
+
+#[tauri::command]
+async fn get_project_config_poll(
+    state: State<'_, AppState>,
+) -> Result<ProjectConfig, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_project_config_poll().await
+}
+
+#[tauri::command]
+async fn create_account(
+    state: State<'_, AppState>,
+    url: String,
+    email: String,
+    passwd_hash: String,
+    user_name: String,
+    team_name: String,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client
+        .create_account(&url, &email, &passwd_hash, &user_name, &team_name)
+        .await
+}
+
+#[tauri::command]
+async fn create_account_poll(
+    state: State<'_, AppState>,
+) -> Result<AccountOut, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.create_account_poll().await
+}
+
+#[tauri::command]
+fn compute_passwd_hash(email: String, password: String) -> String {
+    use md5::{Digest, Md5};
+    let mut hasher = Md5::new();
+    hasher.update(password.as_bytes());
+    hasher.update(email.to_lowercase().as_bytes());
+    hex::encode(hasher.finalize())
+}
+
+// ── Account manager (Phase 4) ──────────────────────────────────
+
+#[tauri::command]
+async fn acct_mgr_info(
+    state: State<'_, AppState>,
+) -> Result<AcctMgrInfo, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.acct_mgr_info().await
+}
+
+#[tauri::command]
+async fn acct_mgr_rpc(
+    state: State<'_, AppState>,
+    url: String,
+    name: String,
+    password: String,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.acct_mgr_rpc(&url, &name, &password).await
+}
+
+#[tauri::command]
+async fn acct_mgr_rpc_poll(
+    state: State<'_, AppState>,
+) -> Result<AcctMgrRpcReply, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.acct_mgr_rpc_poll().await
+}
+
+// ── Proxy settings (Phase 5) ────────────────────────────────────
+
+#[tauri::command]
+async fn get_proxy_settings(
+    state: State<'_, AppState>,
+) -> Result<ProxyInfo, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_proxy_settings().await
+}
+
+#[tauri::command]
+async fn set_proxy_settings(
+    state: State<'_, AppState>,
+    proxy: ProxyInfo,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.set_proxy_settings(&proxy).await
+}
+
+// ── CC Config (Phase 5) ─────────────────────────────────────────
+
+#[tauri::command]
+async fn get_cc_config(
+    state: State<'_, AppState>,
+) -> Result<CcConfig, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_cc_config().await
+}
+
+#[tauri::command]
+async fn set_cc_config(
+    state: State<'_, AppState>,
+    config: CcConfig,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.set_cc_config(&config).await
+}
+
+// ── Version check (Phase 6) ─────────────────────────────────────
+
+#[tauri::command]
+async fn get_newer_version(
+    state: State<'_, AppState>,
+) -> Result<NewerVersionInfo, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_newer_version().await
+}
+
+// ── Graphics launcher (Phase 7) ─────────────────────────────────
+
+#[tauri::command]
+fn launch_graphics(path: String) -> Result<(), String> {
+    std::process::Command::new(&path)
+        .spawn()
+        .map_err(|e| format!("Failed to launch graphics: {e}"))?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -451,6 +613,24 @@ pub fn run() {
             lookup_account_poll,
             project_attach,
             project_attach_poll,
+            // Phase 4
+            get_project_config,
+            get_project_config_poll,
+            create_account,
+            create_account_poll,
+            compute_passwd_hash,
+            acct_mgr_info,
+            acct_mgr_rpc,
+            acct_mgr_rpc_poll,
+            // Phase 5
+            get_proxy_settings,
+            set_proxy_settings,
+            get_cc_config,
+            set_cc_config,
+            // Phase 6
+            get_newer_version,
+            // Phase 7
+            launch_graphics,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

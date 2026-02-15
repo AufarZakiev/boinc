@@ -21,9 +21,30 @@ pub struct TaskResult {
     pub got_server_ack: bool,
     pub plan_class: String,
     pub resources: String,
+    // Extended fields (Phase 2)
+    pub version_num: i32,
+    pub slot: i32,
+    pub pid: i32,
+    pub checkpoint_cpu_time: f64,
+    pub current_cpu_time: f64,
+    pub progress_rate: f64,
+    pub working_set_size_smoothed: f64,
+    pub swap_size: f64,
+    pub slot_path: String,
+    pub graphics_exec_path: String,
+    pub web_graphics_url: String,
+    pub remote_desktop_addr: String,
 }
 
-/// Matches BOINC's PROJECT struct (subset needed for display).
+/// A GUI URL associated with a project.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct GuiUrl {
+    pub name: String,
+    pub description: String,
+    pub url: String,
+}
+
+/// Matches BOINC's PROJECT struct.
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct Project {
     pub master_url: String,
@@ -36,6 +57,21 @@ pub struct Project {
     pub host_expavg_credit: f64,
     pub suspended_via_gui: bool,
     pub dont_request_more_work: bool,
+    // Extended fields (Phase 2)
+    pub resource_share: f64,
+    pub hostid: i32,
+    pub disk_usage: f64,
+    pub nrpc_failures: i32,
+    pub min_rpc_time: f64,
+    pub download_backoff: f64,
+    pub upload_backoff: f64,
+    pub sched_priority: f64,
+    pub duration_correction_factor: f64,
+    pub last_rpc_time: f64,
+    pub njobs_success: i32,
+    pub njobs_error: i32,
+    pub venue: String,
+    pub gui_urls: Vec<GuiUrl>,
 }
 
 /// Matches BOINC's CC_STATUS struct.
@@ -51,6 +87,10 @@ pub struct CcStatus {
     pub network_mode_perm: i32,
     pub network_mode_delay: f64,
     pub network_status: i32,
+    // Suspend reasons (Phase 3)
+    pub task_suspend_reason: i32,
+    pub gpu_suspend_reason: i32,
+    pub network_suspend_reason: i32,
 }
 
 /// Matches BOINC's FILE_TRANSFER struct.
@@ -133,6 +173,16 @@ pub struct DiskUsage {
     pub d_allowed: f64,
 }
 
+/// Per-day-of-week preferences.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DayOfWeekPrefs {
+    pub day_of_week: i32,
+    pub start_hour: f64,
+    pub end_hour: f64,
+    pub net_start_hour: f64,
+    pub net_end_hour: f64,
+}
+
 /// Global preferences (computing/network/storage settings).
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GlobalPreferences {
@@ -155,6 +205,12 @@ pub struct GlobalPreferences {
     pub end_hour: f64,
     pub net_start_hour: f64,
     pub net_end_hour: f64,
+    // Enhanced preferences (Phase 5)
+    pub suspend_if_no_recent_input: f64,
+    pub suspend_cpu_usage: f64,
+    pub leave_apps_in_memory: bool,
+    pub work_buf_additional_days: f64,
+    pub day_prefs: Vec<DayOfWeekPrefs>,
 }
 
 /// Host information.
@@ -203,4 +259,88 @@ pub struct AccountOut {
 pub struct ProjectAttachReply {
     pub error_num: i32,
     pub messages: Vec<String>,
+}
+
+/// Project configuration from get_project_config (Phase 4).
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct ProjectConfig {
+    pub error_num: i32,
+    pub name: String,
+    pub master_url: String,
+    pub min_passwd_length: i32,
+    pub account_creation_disabled: bool,
+    pub client_account_creation_disabled: bool,
+    pub uses_username: bool,
+    pub terms_of_use: String,
+    pub terms_of_use_is_html: bool,
+    pub ldap_auth: bool,
+    pub platforms: Vec<String>,
+    pub sched_stopped: bool,
+    pub web_stopped: bool,
+}
+
+/// Account manager info (Phase 4).
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct AcctMgrInfo {
+    pub acct_mgr_name: String,
+    pub acct_mgr_url: String,
+    pub have_credentials: bool,
+}
+
+/// Account manager RPC reply (Phase 4).
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct AcctMgrRpcReply {
+    pub error_num: i32,
+    pub messages: Vec<String>,
+}
+
+/// Proxy settings (Phase 5).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProxyInfo {
+    pub use_http_proxy: bool,
+    pub http_server_name: String,
+    pub http_server_port: i32,
+    pub http_user_name: String,
+    pub http_user_passwd: String,
+    pub use_http_auth: bool,
+    pub use_socks_proxy: bool,
+    pub socks_server_name: String,
+    pub socks_server_port: i32,
+    pub socks5_user_name: String,
+    pub socks5_user_passwd: String,
+    pub socks5_remote_dns: bool,
+    pub noproxy_hosts: String,
+}
+
+/// CC Config (subset the GUI exposes) (Phase 5).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CcConfig {
+    pub exclusive_apps: Vec<String>,
+    pub exclusive_gpu_apps: Vec<String>,
+    pub log_flags: LogFlags,
+    pub max_file_xfers: i32,
+    pub max_ncpus: i32,
+    pub report_results_immediately: bool,
+}
+
+/// Log flags subset (Phase 5).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LogFlags {
+    pub task: bool,
+    pub file_xfer: bool,
+    pub sched_ops: bool,
+    pub cpu_sched: bool,
+    pub network_xfer: bool,
+    pub mem_usage: bool,
+    pub disk_usage: bool,
+    pub http_debug: bool,
+    pub state_debug: bool,
+    pub statefile_debug: bool,
+}
+
+/// Newer version check result (Phase 6).
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct NewerVersionInfo {
+    pub newer_version: String,
+    pub download_url: String,
 }

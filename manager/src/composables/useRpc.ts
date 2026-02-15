@@ -13,6 +13,12 @@ import type {
   ProjectListEntry,
   AccountOut,
   ProjectAttachReply,
+  ProjectConfig,
+  AcctMgrInfo,
+  AcctMgrRpcReply,
+  ProxyInfo,
+  CcConfig,
+  NewerVersionInfo,
 } from "../types/boinc";
 
 /**
@@ -236,4 +242,85 @@ export async function projectAttach(
 
 export async function projectAttachPoll(): Promise<ProjectAttachReply> {
   return invoke("project_attach_poll");
+}
+
+// ── Project config ──────────────────────────────────────────────
+
+export async function getProjectConfig(url: string): Promise<void> {
+  return invoke("get_project_config", { url });
+}
+
+export async function getProjectConfigPoll(): Promise<ProjectConfig> {
+  return invoke("get_project_config_poll");
+}
+
+export async function createAccount(
+  url: string,
+  email: string,
+  passwdHash: string,
+  userName: string,
+  teamName: string,
+): Promise<void> {
+  return invoke("create_account", { url, email, passwdHash, userName, teamName });
+}
+
+export async function createAccountPoll(): Promise<AccountOut> {
+  return invoke("create_account_poll");
+}
+
+export async function computePasswdHash(
+  email: string,
+  password: string,
+): Promise<string> {
+  return invoke("compute_passwd_hash", { email, password });
+}
+
+// ── Account manager ─────────────────────────────────────────────
+
+export async function acctMgrInfo(): Promise<AcctMgrInfo> {
+  return invoke("acct_mgr_info");
+}
+
+export async function acctMgrRpc(
+  url: string,
+  name: string,
+  password: string,
+): Promise<void> {
+  return invoke("acct_mgr_rpc", { url, name, password });
+}
+
+export async function acctMgrRpcPoll(): Promise<AcctMgrRpcReply> {
+  return invoke("acct_mgr_rpc_poll");
+}
+
+// ── Proxy settings ──────────────────────────────────────────────
+
+export async function getProxySettings(): Promise<ProxyInfo> {
+  return invoke("get_proxy_settings");
+}
+
+export async function setProxySettings(proxy: ProxyInfo): Promise<void> {
+  return invoke("set_proxy_settings", { proxy });
+}
+
+// ── CC Config ───────────────────────────────────────────────────
+
+export async function getCcConfig(): Promise<CcConfig> {
+  return invoke("get_cc_config");
+}
+
+export async function setCcConfig(config: CcConfig): Promise<void> {
+  return invoke("set_cc_config", { config });
+}
+
+// ── Version check ───────────────────────────────────────────────
+
+export async function getNewerVersion(): Promise<NewerVersionInfo> {
+  return invoke("get_newer_version");
+}
+
+// ── Graphics launcher ───────────────────────────────────────────
+
+export async function launchGraphics(path: string): Promise<void> {
+  return invoke("launch_graphics", { path });
 }

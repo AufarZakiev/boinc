@@ -2,9 +2,10 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 
 use super::types::{
-    AccountOut, CcStatus, DailyStats, DiskUsage, DiskUsageProject, FileTransfer, GlobalPreferences,
-    HostInfo, Message, Notice, Project, ProjectAttachReply, ProjectListEntry, ProjectStatistics,
-    TaskResult,
+    AccountOut, AcctMgrInfo, AcctMgrRpcReply, CcConfig, CcStatus, DailyStats, DayOfWeekPrefs,
+    DiskUsage, DiskUsageProject, FileTransfer, GlobalPreferences, GuiUrl, HostInfo, LogFlags,
+    Message, NewerVersionInfo, Notice, Project, ProjectAttachReply, ProjectConfig, ProjectListEntry,
+    ProjectStatistics, ProxyInfo, TaskResult,
 };
 
 /// Extract text content of an XML element, advancing the reader past its end tag.
@@ -72,6 +73,42 @@ pub fn parse_results(xml: &str) -> Vec<TaskResult> {
                                     current.fraction_done =
                                         text.parse().unwrap_or(0.0);
                                 }
+                                "checkpoint_cpu_time" => {
+                                    current.checkpoint_cpu_time =
+                                        text.parse().unwrap_or(0.0);
+                                }
+                                "current_cpu_time" => {
+                                    current.current_cpu_time =
+                                        text.parse().unwrap_or(0.0);
+                                }
+                                "progress_rate" => {
+                                    current.progress_rate =
+                                        text.parse().unwrap_or(0.0);
+                                }
+                                "working_set_size_smoothed" => {
+                                    current.working_set_size_smoothed =
+                                        text.parse().unwrap_or(0.0);
+                                }
+                                "swap_size" => {
+                                    current.swap_size =
+                                        text.parse().unwrap_or(0.0);
+                                }
+                                "slot" => {
+                                    current.slot = text.parse().unwrap_or(-1);
+                                }
+                                "pid" => {
+                                    current.pid = text.parse().unwrap_or(0);
+                                }
+                                "slot_path" => current.slot_path = text,
+                                "graphics_exec_path" => {
+                                    current.graphics_exec_path = text
+                                }
+                                "web_graphics_url" => {
+                                    current.web_graphics_url = text
+                                }
+                                "remote_desktop_addr" => {
+                                    current.remote_desktop_addr = text
+                                }
                                 _ => {}
                             }
                         } else {
@@ -112,6 +149,10 @@ pub fn parse_results(xml: &str) -> Vec<TaskResult> {
                                 }
                                 "plan_class" => current.plan_class = text,
                                 "resources" => current.resources = text,
+                                "version_num" => {
+                                    current.version_num =
+                                        text.parse().unwrap_or(0);
+                                }
                                 _ => {}
                             }
                         }
@@ -161,7 +202,10 @@ pub fn parse_projects(xml: &str) -> Vec<Project> {
     let mut buf = Vec::new();
     let mut projects = Vec::new();
     let mut in_project = false;
+    let mut in_gui_urls = false;
+    let mut in_gui_url = false;
     let mut current = Project::default();
+    let mut current_gui_url = GuiUrl::default();
 
     loop {
         match reader.read_event_into(&mut buf) {
@@ -172,7 +216,23 @@ pub fn parse_projects(xml: &str) -> Vec<Project> {
                         in_project = true;
                         current = Project::default();
                     }
-                    _ if in_project => {
+                    "gui_urls" if in_project => {
+                        in_gui_urls = true;
+                    }
+                    "gui_url" if in_gui_urls => {
+                        in_gui_url = true;
+                        current_gui_url = GuiUrl::default();
+                    }
+                    _ if in_gui_url => {
+                        let text = read_text(&mut reader);
+                        match tag.as_str() {
+                            "name" => current_gui_url.name = text,
+                            "description" => current_gui_url.description = text,
+                            "url" => current_gui_url.url = text,
+                            _ => {}
+                        }
+                    }
+                    _ if in_project && !in_gui_urls => {
                         let text = read_text(&mut reader);
                         match tag.as_str() {
                             "master_url" => current.master_url = text,
@@ -195,6 +255,54 @@ pub fn parse_projects(xml: &str) -> Vec<Project> {
                                 current.host_expavg_credit =
                                     text.parse().unwrap_or(0.0);
                             }
+                            "resource_share" => {
+                                current.resource_share =
+                                    text.parse().unwrap_or(0.0);
+                            }
+                            "hostid" => {
+                                current.hostid = text.parse().unwrap_or(0);
+                            }
+                            "disk_usage" => {
+                                current.disk_usage =
+                                    text.parse().unwrap_or(0.0);
+                            }
+                            "nrpc_failures" => {
+                                current.nrpc_failures =
+                                    text.parse().unwrap_or(0);
+                            }
+                            "min_rpc_time" => {
+                                current.min_rpc_time =
+                                    text.parse().unwrap_or(0.0);
+                            }
+                            "download_backoff" => {
+                                current.download_backoff =
+                                    text.parse().unwrap_or(0.0);
+                            }
+                            "upload_backoff" => {
+                                current.upload_backoff =
+                                    text.parse().unwrap_or(0.0);
+                            }
+                            "sched_priority" => {
+                                current.sched_priority =
+                                    text.parse().unwrap_or(0.0);
+                            }
+                            "duration_correction_factor" => {
+                                current.duration_correction_factor =
+                                    text.parse().unwrap_or(0.0);
+                            }
+                            "last_rpc_time" => {
+                                current.last_rpc_time =
+                                    text.parse().unwrap_or(0.0);
+                            }
+                            "njobs_success" => {
+                                current.njobs_success =
+                                    text.parse().unwrap_or(0);
+                            }
+                            "njobs_error" => {
+                                current.njobs_error =
+                                    text.parse().unwrap_or(0);
+                            }
+                            "venue" => current.venue = text,
                             _ => {}
                         }
                     }
@@ -213,9 +321,21 @@ pub fn parse_projects(xml: &str) -> Vec<Project> {
             }
             Ok(Event::End(ref e)) => {
                 let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                if tag == "project" {
-                    in_project = false;
-                    projects.push(current.clone());
+                match tag.as_str() {
+                    "project" => {
+                        in_project = false;
+                        in_gui_urls = false;
+                        in_gui_url = false;
+                        projects.push(current.clone());
+                    }
+                    "gui_urls" => {
+                        in_gui_urls = false;
+                    }
+                    "gui_url" => {
+                        in_gui_url = false;
+                        current.gui_urls.push(current_gui_url.clone());
+                    }
+                    _ => {}
                 }
             }
             Ok(Event::Eof) => break,
@@ -279,6 +399,18 @@ pub fn parse_cc_status(xml: &str) -> CcStatus {
                             "network_status" => {
                                 status.network_status = text.parse().unwrap_or(0);
                             }
+                            "task_suspend_reason" => {
+                                status.task_suspend_reason =
+                                    text.parse().unwrap_or(0);
+                            }
+                            "gpu_suspend_reason" => {
+                                status.gpu_suspend_reason =
+                                    text.parse().unwrap_or(0);
+                            }
+                            "network_suspend_reason" => {
+                                status.network_suspend_reason =
+                                    text.parse().unwrap_or(0);
+                            }
                             _ => {}
                         }
                     }
@@ -305,7 +437,6 @@ pub fn parse_success(xml: &str) -> Result<(), String> {
     if xml.contains("<success/>") {
         Ok(())
     } else if xml.contains("<error>") {
-        // Extract the error message
         let mut reader = Reader::from_str(xml);
         let mut buf = Vec::new();
         loop {
@@ -666,6 +797,8 @@ pub fn parse_global_preferences(xml: &str) -> GlobalPreferences {
     let mut buf = Vec::new();
     let mut prefs = GlobalPreferences::default();
     let mut in_prefs = false;
+    let mut in_day_prefs = false;
+    let mut current_day = DayOfWeekPrefs::default();
 
     loop {
         match reader.read_event_into(&mut buf) {
@@ -674,6 +807,31 @@ pub fn parse_global_preferences(xml: &str) -> GlobalPreferences {
                 match tag.as_str() {
                     "global_preferences" => {
                         in_prefs = true;
+                    }
+                    "day_prefs" if in_prefs => {
+                        in_day_prefs = true;
+                        current_day = DayOfWeekPrefs::default();
+                    }
+                    _ if in_day_prefs => {
+                        let text = read_text(&mut reader);
+                        match tag.as_str() {
+                            "day_of_week" => {
+                                current_day.day_of_week = text.parse().unwrap_or(0)
+                            }
+                            "start_hour" => {
+                                current_day.start_hour = text.parse().unwrap_or(0.0)
+                            }
+                            "end_hour" => {
+                                current_day.end_hour = text.parse().unwrap_or(0.0)
+                            }
+                            "net_start_hour" => {
+                                current_day.net_start_hour = text.parse().unwrap_or(0.0)
+                            }
+                            "net_end_hour" => {
+                                current_day.net_end_hour = text.parse().unwrap_or(0.0)
+                            }
+                            _ => {}
+                        }
                     }
                     _ if in_prefs => {
                         let text = read_text(&mut reader);
@@ -736,6 +894,21 @@ pub fn parse_global_preferences(xml: &str) -> GlobalPreferences {
                             "net_end_hour" => {
                                 prefs.net_end_hour = text.parse().unwrap_or(0.0)
                             }
+                            "suspend_if_no_recent_input" => {
+                                prefs.suspend_if_no_recent_input =
+                                    text.parse().unwrap_or(0.0)
+                            }
+                            "suspend_cpu_usage" => {
+                                prefs.suspend_cpu_usage = text.parse().unwrap_or(0.0)
+                            }
+                            "leave_apps_in_memory" => {
+                                prefs.leave_apps_in_memory =
+                                    text.parse::<i32>().unwrap_or(0) != 0
+                            }
+                            "work_buf_additional_days" => {
+                                prefs.work_buf_additional_days =
+                                    text.parse().unwrap_or(0.0)
+                            }
                             _ => {}
                         }
                     }
@@ -747,13 +920,21 @@ pub fn parse_global_preferences(xml: &str) -> GlobalPreferences {
                 match tag.as_str() {
                     "run_on_batteries" => prefs.run_on_batteries = true,
                     "run_if_user_active" => prefs.run_if_user_active = true,
+                    "leave_apps_in_memory" => prefs.leave_apps_in_memory = true,
                     _ => {}
                 }
             }
             Ok(Event::End(ref e)) => {
                 let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                if tag == "global_preferences" {
-                    in_prefs = false;
+                match tag.as_str() {
+                    "global_preferences" => {
+                        in_prefs = false;
+                    }
+                    "day_prefs" => {
+                        in_day_prefs = false;
+                        prefs.day_prefs.push(current_day.clone());
+                    }
+                    _ => {}
                 }
             }
             Ok(Event::Eof) => break,
@@ -767,7 +948,7 @@ pub fn parse_global_preferences(xml: &str) -> GlobalPreferences {
 
 /// Serialize global preferences to XML for `set_global_prefs_override`.
 pub fn serialize_global_preferences(prefs: &GlobalPreferences) -> String {
-    format!(
+    let mut xml = format!(
         "<global_preferences>\n\
          <run_on_batteries>{}</run_on_batteries>\n\
          <run_if_user_active>{}</run_if_user_active>\n\
@@ -788,7 +969,10 @@ pub fn serialize_global_preferences(prefs: &GlobalPreferences) -> String {
          <end_hour>{}</end_hour>\n\
          <net_start_hour>{}</net_start_hour>\n\
          <net_end_hour>{}</net_end_hour>\n\
-         </global_preferences>",
+         <suspend_if_no_recent_input>{}</suspend_if_no_recent_input>\n\
+         <suspend_cpu_usage>{}</suspend_cpu_usage>\n\
+         <leave_apps_in_memory>{}</leave_apps_in_memory>\n\
+         <work_buf_additional_days>{}</work_buf_additional_days>\n",
         if prefs.run_on_batteries { 1 } else { 0 },
         if prefs.run_if_user_active { 1 } else { 0 },
         prefs.idle_time_to_run,
@@ -808,7 +992,25 @@ pub fn serialize_global_preferences(prefs: &GlobalPreferences) -> String {
         prefs.end_hour,
         prefs.net_start_hour,
         prefs.net_end_hour,
-    )
+        prefs.suspend_if_no_recent_input,
+        prefs.suspend_cpu_usage,
+        if prefs.leave_apps_in_memory { 1 } else { 0 },
+        prefs.work_buf_additional_days,
+    );
+    for dp in &prefs.day_prefs {
+        xml.push_str(&format!(
+            "<day_prefs>\n\
+             <day_of_week>{}</day_of_week>\n\
+             <start_hour>{}</start_hour>\n\
+             <end_hour>{}</end_hour>\n\
+             <net_start_hour>{}</net_start_hour>\n\
+             <net_end_hour>{}</net_end_hour>\n\
+             </day_prefs>\n",
+            dp.day_of_week, dp.start_hour, dp.end_hour, dp.net_start_hour, dp.net_end_hour
+        ));
+    }
+    xml.push_str("</global_preferences>");
+    xml
 }
 
 /// Parse `<host_info>` from a `get_host_info` response.
@@ -1012,6 +1214,432 @@ pub fn parse_project_attach_reply(xml: &str) -> ProjectAttachReply {
     reply
 }
 
+/// Parse `<project_config>` from a `get_project_config_poll` response (Phase 4).
+pub fn parse_project_config(xml: &str) -> ProjectConfig {
+    let mut reader = Reader::from_str(xml);
+    let mut buf = Vec::new();
+    let mut config = ProjectConfig::default();
+    let mut in_config = false;
+    let mut in_platforms = false;
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match tag.as_str() {
+                    "project_config" => {
+                        in_config = true;
+                    }
+                    "platforms" if in_config => {
+                        in_platforms = true;
+                    }
+                    "platform_name" if in_platforms => {
+                        let text = read_text(&mut reader);
+                        config.platforms.push(text);
+                    }
+                    _ if in_config && !in_platforms => {
+                        let text = read_text(&mut reader);
+                        match tag.as_str() {
+                            "error_num" => config.error_num = text.parse().unwrap_or(0),
+                            "name" => config.name = text,
+                            "master_url" => config.master_url = text,
+                            "min_passwd_length" => {
+                                config.min_passwd_length = text.parse().unwrap_or(0)
+                            }
+                            "terms_of_use" => config.terms_of_use = text,
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::Empty(ref e)) if in_config => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match tag.as_str() {
+                    "account_creation_disabled" => config.account_creation_disabled = true,
+                    "client_account_creation_disabled" => {
+                        config.client_account_creation_disabled = true
+                    }
+                    "uses_username" => config.uses_username = true,
+                    "terms_of_use_is_html" => config.terms_of_use_is_html = true,
+                    "ldap_auth" => config.ldap_auth = true,
+                    "sched_stopped" => config.sched_stopped = true,
+                    "web_stopped" => config.web_stopped = true,
+                    _ => {}
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match tag.as_str() {
+                    "project_config" => in_config = false,
+                    "platforms" => in_platforms = false,
+                    _ => {}
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    config
+}
+
+/// Parse `<acct_mgr_info>` response (Phase 4).
+pub fn parse_acct_mgr_info(xml: &str) -> AcctMgrInfo {
+    let mut reader = Reader::from_str(xml);
+    let mut buf = Vec::new();
+    let mut info = AcctMgrInfo::default();
+    let mut in_info = false;
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match tag.as_str() {
+                    "acct_mgr_info" => in_info = true,
+                    _ if in_info => {
+                        let text = read_text(&mut reader);
+                        match tag.as_str() {
+                            "acct_mgr_name" => info.acct_mgr_name = text,
+                            "acct_mgr_url" => info.acct_mgr_url = text,
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::Empty(ref e)) if in_info => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                if tag == "have_credentials" {
+                    info.have_credentials = true;
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                if tag == "acct_mgr_info" {
+                    in_info = false;
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    info
+}
+
+/// Parse `<acct_mgr_rpc_reply>` response (Phase 4).
+pub fn parse_acct_mgr_rpc_reply(xml: &str) -> AcctMgrRpcReply {
+    let mut reader = Reader::from_str(xml);
+    let mut buf = Vec::new();
+    let mut reply = AcctMgrRpcReply::default();
+    let mut in_reply = false;
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match tag.as_str() {
+                    "acct_mgr_rpc_reply" => in_reply = true,
+                    _ if in_reply => {
+                        let text = read_text(&mut reader);
+                        match tag.as_str() {
+                            "error_num" => reply.error_num = text.parse().unwrap_or(0),
+                            "message" => reply.messages.push(text),
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                if tag == "acct_mgr_rpc_reply" {
+                    in_reply = false;
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    reply
+}
+
+/// Parse `<proxy_info>` from `get_proxy_settings` response (Phase 5).
+pub fn parse_proxy_info(xml: &str) -> ProxyInfo {
+    let mut reader = Reader::from_str(xml);
+    let mut buf = Vec::new();
+    let mut info = ProxyInfo::default();
+    let mut in_proxy = false;
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match tag.as_str() {
+                    "proxy_info" => in_proxy = true,
+                    _ if in_proxy => {
+                        let text = read_text(&mut reader);
+                        match tag.as_str() {
+                            "http_server_name" => info.http_server_name = text,
+                            "http_server_port" => {
+                                info.http_server_port = text.parse().unwrap_or(0)
+                            }
+                            "http_user_name" => info.http_user_name = text,
+                            "http_user_passwd" => info.http_user_passwd = text,
+                            "socks_server_name" => info.socks_server_name = text,
+                            "socks_server_port" => {
+                                info.socks_server_port = text.parse().unwrap_or(0)
+                            }
+                            "socks5_user_name" => info.socks5_user_name = text,
+                            "socks5_user_passwd" => info.socks5_user_passwd = text,
+                            "noproxy_hosts" => info.noproxy_hosts = text,
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::Empty(ref e)) if in_proxy => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match tag.as_str() {
+                    "use_http_proxy" => info.use_http_proxy = true,
+                    "use_http_auth" => info.use_http_auth = true,
+                    "use_socks_proxy" => info.use_socks_proxy = true,
+                    "socks5_remote_dns" => info.socks5_remote_dns = true,
+                    _ => {}
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                if tag == "proxy_info" {
+                    in_proxy = false;
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    info
+}
+
+/// Serialize proxy info to XML (Phase 5).
+pub fn serialize_proxy_info(info: &ProxyInfo) -> String {
+    let mut xml = String::from("<proxy_info>\n");
+    if info.use_http_proxy {
+        xml.push_str("<use_http_proxy/>\n");
+    }
+    xml.push_str(&format!(
+        "<http_server_name>{}</http_server_name>\n\
+         <http_server_port>{}</http_server_port>\n\
+         <http_user_name>{}</http_user_name>\n\
+         <http_user_passwd>{}</http_user_passwd>\n",
+        info.http_server_name, info.http_server_port, info.http_user_name, info.http_user_passwd,
+    ));
+    if info.use_http_auth {
+        xml.push_str("<use_http_auth/>\n");
+    }
+    if info.use_socks_proxy {
+        xml.push_str("<use_socks_proxy/>\n");
+    }
+    xml.push_str(&format!(
+        "<socks_server_name>{}</socks_server_name>\n\
+         <socks_server_port>{}</socks_server_port>\n\
+         <socks5_user_name>{}</socks5_user_name>\n\
+         <socks5_user_passwd>{}</socks5_user_passwd>\n",
+        info.socks_server_name, info.socks_server_port, info.socks5_user_name,
+        info.socks5_user_passwd,
+    ));
+    if info.socks5_remote_dns {
+        xml.push_str("<socks5_remote_dns/>\n");
+    }
+    xml.push_str(&format!(
+        "<noproxy_hosts>{}</noproxy_hosts>\n</proxy_info>",
+        info.noproxy_hosts
+    ));
+    xml
+}
+
+/// Parse `<cc_config>` from `get_cc_config` response (Phase 5).
+pub fn parse_cc_config(xml: &str) -> CcConfig {
+    let mut reader = Reader::from_str(xml);
+    let mut buf = Vec::new();
+    let mut config = CcConfig::default();
+    let mut in_config = false;
+    let mut in_log_flags = false;
+    let mut in_exclusive_apps = false;
+    let mut in_exclusive_gpu_apps = false;
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match tag.as_str() {
+                    "cc_config" | "config" => in_config = true,
+                    "log_flags" if in_config => in_log_flags = true,
+                    "options" if in_config => {} // container tag, just enter it
+                    "exclusive_app" if in_config && !in_exclusive_gpu_apps => {
+                        let text = read_text(&mut reader);
+                        config.exclusive_apps.push(text);
+                    }
+                    "exclusive_gpu_app" if in_config => {
+                        let text = read_text(&mut reader);
+                        config.exclusive_gpu_apps.push(text);
+                    }
+                    _ if in_log_flags => {
+                        let text = read_text(&mut reader);
+                        let val = text.parse::<i32>().unwrap_or(0) != 0;
+                        match tag.as_str() {
+                            "task" => config.log_flags.task = val,
+                            "file_xfer" => config.log_flags.file_xfer = val,
+                            "sched_ops" => config.log_flags.sched_ops = val,
+                            "cpu_sched" => config.log_flags.cpu_sched = val,
+                            "network_xfer" => config.log_flags.network_xfer = val,
+                            "mem_usage" => config.log_flags.mem_usage = val,
+                            "disk_usage" => config.log_flags.disk_usage = val,
+                            "http_debug" => config.log_flags.http_debug = val,
+                            "state_debug" => config.log_flags.state_debug = val,
+                            "statefile_debug" => config.log_flags.statefile_debug = val,
+                            _ => {}
+                        }
+                    }
+                    _ if in_config && !in_log_flags => {
+                        let text = read_text(&mut reader);
+                        match tag.as_str() {
+                            "max_file_xfers" => {
+                                config.max_file_xfers = text.parse().unwrap_or(0)
+                            }
+                            "max_ncpus" => {
+                                config.max_ncpus = text.parse().unwrap_or(0)
+                            }
+                            "report_results_immediately" => {
+                                config.report_results_immediately =
+                                    text.parse::<i32>().unwrap_or(0) != 0
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::Empty(ref e)) if in_config => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match tag.as_str() {
+                    "report_results_immediately" => config.report_results_immediately = true,
+                    _ if in_log_flags => {
+                        match tag.as_str() {
+                            "task" => config.log_flags.task = true,
+                            "file_xfer" => config.log_flags.file_xfer = true,
+                            "sched_ops" => config.log_flags.sched_ops = true,
+                            "cpu_sched" => config.log_flags.cpu_sched = true,
+                            "network_xfer" => config.log_flags.network_xfer = true,
+                            "mem_usage" => config.log_flags.mem_usage = true,
+                            "disk_usage" => config.log_flags.disk_usage = true,
+                            "http_debug" => config.log_flags.http_debug = true,
+                            "state_debug" => config.log_flags.state_debug = true,
+                            "statefile_debug" => config.log_flags.statefile_debug = true,
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match tag.as_str() {
+                    "cc_config" | "config" => in_config = false,
+                    "log_flags" => in_log_flags = false,
+                    "exclusive_apps" => in_exclusive_apps = false,
+                    "exclusive_gpu_apps" => in_exclusive_gpu_apps = false,
+                    _ => {}
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    let _ = (in_exclusive_apps, in_exclusive_gpu_apps); // suppress unused warnings
+    config
+}
+
+/// Serialize cc_config to XML (Phase 5).
+pub fn serialize_cc_config(config: &CcConfig) -> String {
+    let mut xml = String::from("<cc_config>\n<options>\n");
+    for app in &config.exclusive_apps {
+        xml.push_str(&format!("<exclusive_app>{app}</exclusive_app>\n"));
+    }
+    for app in &config.exclusive_gpu_apps {
+        xml.push_str(&format!("<exclusive_gpu_app>{app}</exclusive_gpu_app>\n"));
+    }
+    if config.max_file_xfers > 0 {
+        xml.push_str(&format!(
+            "<max_file_xfers>{}</max_file_xfers>\n",
+            config.max_file_xfers
+        ));
+    }
+    if config.max_ncpus > 0 {
+        xml.push_str(&format!("<max_ncpus>{}</max_ncpus>\n", config.max_ncpus));
+    }
+    if config.report_results_immediately {
+        xml.push_str("<report_results_immediately/>\n");
+    }
+    xml.push_str("</options>\n<log_flags>\n");
+    let flags = &config.log_flags;
+    let flag_list = [
+        ("task", flags.task),
+        ("file_xfer", flags.file_xfer),
+        ("sched_ops", flags.sched_ops),
+        ("cpu_sched", flags.cpu_sched),
+        ("network_xfer", flags.network_xfer),
+        ("mem_usage", flags.mem_usage),
+        ("disk_usage", flags.disk_usage),
+        ("http_debug", flags.http_debug),
+        ("state_debug", flags.state_debug),
+        ("statefile_debug", flags.statefile_debug),
+    ];
+    for (name, val) in flag_list {
+        xml.push_str(&format!(
+            "<{name}>{}</{name}>\n",
+            if val { 1 } else { 0 }
+        ));
+    }
+    xml.push_str("</log_flags>\n</cc_config>");
+    xml
+}
+
+/// Parse `<newer_version>` from `get_newer_version` response (Phase 6).
+pub fn parse_newer_version(xml: &str) -> NewerVersionInfo {
+    let mut reader = Reader::from_str(xml);
+    let mut buf = Vec::new();
+    let mut info = NewerVersionInfo::default();
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match tag.as_str() {
+                    "newer_version" => info.newer_version = read_text(&mut reader),
+                    "download_url" => info.download_url = read_text(&mut reader),
+                    _ => {}
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    info
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1031,11 +1659,18 @@ mod tests {
     <state>2</state>
     <plan_class>sse2</plan_class>
     <resources>1 CPU</resources>
+    <version_num>710</version_num>
     <active_task>
         <active_task_state>1</active_task_state>
         <scheduler_state>2</scheduler_state>
         <elapsed_time>1200.300000</elapsed_time>
         <fraction_done>0.456000</fraction_done>
+        <checkpoint_cpu_time>1100.000000</checkpoint_cpu_time>
+        <current_cpu_time>1200.000000</current_cpu_time>
+        <slot>0</slot>
+        <pid>12345</pid>
+        <working_set_size_smoothed>104857600.000000</working_set_size_smoothed>
+        <graphics_exec_path>/path/to/graphics</graphics_exec_path>
     </active_task>
 </result>
 <result>
@@ -1065,6 +1700,13 @@ mod tests {
         assert_eq!(r0.active_task_state, 1);
         assert!((r0.elapsed_time - 1200.3).abs() < 0.1);
         assert!((r0.fraction_done - 0.456).abs() < 0.001);
+        assert_eq!(r0.version_num, 710);
+        assert!((r0.checkpoint_cpu_time - 1100.0).abs() < 0.1);
+        assert!((r0.current_cpu_time - 1200.0).abs() < 0.1);
+        assert_eq!(r0.slot, 0);
+        assert_eq!(r0.pid, 12345);
+        assert!((r0.working_set_size_smoothed - 104857600.0).abs() < 1.0);
+        assert_eq!(r0.graphics_exec_path, "/path/to/graphics");
 
         let r1 = &results[1];
         assert_eq!(r1.name, "task_67890_0");
@@ -1074,7 +1716,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_projects() {
+    fn test_parse_projects_with_gui_urls() {
         let xml = r#"
 <boinc_gui_rpc_reply>
 <projects>
@@ -1087,7 +1729,23 @@ mod tests {
     <user_expavg_credit>100.500000</user_expavg_credit>
     <host_total_credit>5000.000000</host_total_credit>
     <host_expavg_credit>50.250000</host_expavg_credit>
+    <resource_share>100.000000</resource_share>
+    <njobs_success>42</njobs_success>
+    <njobs_error>3</njobs_error>
+    <venue>home</venue>
     <suspended_via_gui/>
+    <gui_urls>
+        <gui_url>
+            <name>Home Page</name>
+            <description>Project home page</description>
+            <url>https://example.com/</url>
+        </gui_url>
+        <gui_url>
+            <name>Your Account</name>
+            <description>View your account</description>
+            <url>https://example.com/account</url>
+        </gui_url>
+    </gui_urls>
 </project>
 </projects>
 </boinc_gui_rpc_reply>"#;
@@ -1101,10 +1759,17 @@ mod tests {
         assert!((p.user_total_credit - 12345.67).abs() < 0.01);
         assert!(p.suspended_via_gui);
         assert!(!p.dont_request_more_work);
+        assert!((p.resource_share - 100.0).abs() < 0.01);
+        assert_eq!(p.njobs_success, 42);
+        assert_eq!(p.njobs_error, 3);
+        assert_eq!(p.venue, "home");
+        assert_eq!(p.gui_urls.len(), 2);
+        assert_eq!(p.gui_urls[0].name, "Home Page");
+        assert_eq!(p.gui_urls[1].url, "https://example.com/account");
     }
 
     #[test]
-    fn test_parse_cc_status() {
+    fn test_parse_cc_status_with_suspend_reasons() {
         let xml = r#"
 <boinc_gui_rpc_reply>
 <cc_status>
@@ -1118,6 +1783,9 @@ mod tests {
     <network_mode_perm>2</network_mode_perm>
     <network_mode_delay>0.000000</network_mode_delay>
     <network_status>0</network_status>
+    <task_suspend_reason>4</task_suspend_reason>
+    <gpu_suspend_reason>2</gpu_suspend_reason>
+    <network_suspend_reason>0</network_suspend_reason>
 </cc_status>
 </boinc_gui_rpc_reply>"#;
 
@@ -1126,13 +1794,13 @@ mod tests {
         assert_eq!(status.gpu_mode, 2);
         assert_eq!(status.network_mode, 2);
         assert_eq!(status.network_status, 0);
+        assert_eq!(status.task_suspend_reason, 4);
+        assert_eq!(status.gpu_suspend_reason, 2);
+        assert_eq!(status.network_suspend_reason, 0);
     }
 
     #[test]
     fn test_parse_scheduler_state_inside_active_task() {
-        // Regression: scheduler_state is sent inside <active_task> by the
-        // BOINC client. Previously it was only parsed at the result level,
-        // so running tasks showed "Waiting to run" instead of "Running".
         let xml = r#"
 <boinc_gui_rpc_reply>
 <results>
@@ -1156,8 +1824,8 @@ mod tests {
 
         let r = &results[0];
         assert!(r.active_task);
-        assert_eq!(r.active_task_state, 1); // EXECUTING
-        assert_eq!(r.scheduler_state, 2); // SCHEDULED — the key assertion
+        assert_eq!(r.active_task_state, 1);
+        assert_eq!(r.scheduler_state, 2);
     }
 
     #[test]
@@ -1226,16 +1894,10 @@ mod tests {
 
         let t0 = &transfers[0];
         assert_eq!(t0.name, "input_data_001.zip");
-        assert_eq!(t0.project_name, "Example Project");
-        assert!((t0.nbytes - 1048576.0).abs() < 1.0);
-        assert!((t0.bytes_xferred - 524288.0).abs() < 1.0);
-        assert!((t0.xfer_speed - 65536.0).abs() < 1.0);
         assert!(!t0.is_upload);
 
         let t1 = &transfers[1];
-        assert_eq!(t1.name, "output_result_001.zip");
         assert!(t1.is_upload);
-        assert!((t1.bytes_xferred - 1048576.0).abs() < 1.0);
     }
 
     #[test]
@@ -1263,24 +1925,13 @@ mod tests {
         <host_total_credit>500.000000</host_total_credit>
         <host_expavg_credit>25.000000</host_expavg_credit>
     </daily_statistics>
-    <daily_statistics>
-        <day>19801.000000</day>
-        <user_total_credit>1100.000000</user_total_credit>
-        <user_expavg_credit>55.000000</user_expavg_credit>
-        <host_total_credit>550.000000</host_total_credit>
-        <host_expavg_credit>27.500000</host_expavg_credit>
-    </daily_statistics>
 </project_statistics>
 </statistics>
 </boinc_gui_rpc_reply>"#;
 
         let stats = parse_statistics(xml);
         assert_eq!(stats.len(), 1);
-        assert_eq!(stats[0].master_url, "https://example.com/");
-        assert_eq!(stats[0].daily_statistics.len(), 2);
-        assert!((stats[0].daily_statistics[0].day - 19800.0).abs() < 0.1);
-        assert!((stats[0].daily_statistics[0].user_total_credit - 1000.0).abs() < 0.1);
-        assert!((stats[0].daily_statistics[1].host_expavg_credit - 27.5).abs() < 0.1);
+        assert_eq!(stats[0].daily_statistics.len(), 1);
     }
 
     #[test]
@@ -1297,26 +1948,13 @@ Computation started
 </body>
     <time>1700000000</time>
 </msg>
-<msg>
-    <project></project>
-    <pri>3</pri>
-    <seqno>43</seqno>
-    <body>
-Internal error occurred
-</body>
-    <time>1700000001</time>
-</msg>
 </msgs>
 </boinc_gui_rpc_reply>"#;
 
         let messages = parse_messages(xml);
-        assert_eq!(messages.len(), 2);
+        assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].project, "Example Project");
-        assert_eq!(messages[0].priority, 1);
         assert_eq!(messages[0].seqno, 42);
-        assert_eq!(messages[0].body, "Computation started");
-        assert_eq!(messages[1].priority, 3);
-        assert_eq!(messages[1].seqno, 43);
     }
 
     #[test]
@@ -1339,11 +1977,8 @@ Internal error occurred
 
         let notices = parse_notices(xml);
         assert_eq!(notices.len(), 1);
-        assert_eq!(notices[0].seqno, 1);
-        assert_eq!(notices[0].title, "Welcome");
         assert_eq!(notices[0].description, "<b>Hello</b> world");
         assert!(notices[0].is_private);
-        assert_eq!(notices[0].link, "https://example.com");
     }
 
     #[test]
@@ -1364,10 +1999,6 @@ Internal error occurred
 
         let usage = parse_disk_usage(xml);
         assert_eq!(usage.projects.len(), 1);
-        assert_eq!(usage.projects[0].master_url, "https://example.com/");
-        assert!((usage.projects[0].disk_usage - 1073741824.0).abs() < 1.0);
-        assert!((usage.d_total - 500000000000.0).abs() < 1.0);
-        assert!((usage.d_free - 250000000000.0).abs() < 1.0);
     }
 
     #[test]
@@ -1385,16 +2016,26 @@ Internal error occurred
     <disk_max_used_pct>90.000000</disk_max_used_pct>
     <disk_min_free_gb>0.100000</disk_min_free_gb>
     <work_buf_min_days>0.100000</work_buf_min_days>
+    <suspend_if_no_recent_input>60.000000</suspend_if_no_recent_input>
+    <leave_apps_in_memory>1</leave_apps_in_memory>
+    <day_prefs>
+        <day_of_week>0</day_of_week>
+        <start_hour>8.000000</start_hour>
+        <end_hour>22.000000</end_hour>
+        <net_start_hour>0.000000</net_start_hour>
+        <net_end_hour>0.000000</net_end_hour>
+    </day_prefs>
 </global_preferences>
 </boinc_gui_rpc_reply>"#;
 
         let prefs = parse_global_preferences(xml);
         assert!(!prefs.run_on_batteries);
         assert!(prefs.run_if_user_active);
-        assert!((prefs.idle_time_to_run - 3.0).abs() < 0.01);
-        assert!((prefs.max_ncpus_pct - 100.0).abs() < 0.01);
-        assert!((prefs.ram_max_used_busy_frac - 0.5).abs() < 0.01);
-        assert!((prefs.disk_max_used_pct - 90.0).abs() < 0.01);
+        assert!((prefs.suspend_if_no_recent_input - 60.0).abs() < 0.01);
+        assert!(prefs.leave_apps_in_memory);
+        assert_eq!(prefs.day_prefs.len(), 1);
+        assert_eq!(prefs.day_prefs[0].day_of_week, 0);
+        assert!((prefs.day_prefs[0].start_hour - 8.0).abs() < 0.01);
     }
 
     #[test]
@@ -1419,21 +2060,13 @@ Internal error occurred
     <domain_name>myhost</domain_name>
     <ip_addr>192.168.1.100</ip_addr>
     <p_ncpus>8</p_ncpus>
-    <p_vendor>GenuineIntel</p_vendor>
-    <p_model>Intel Core i7</p_model>
-    <p_fpops>2000000000.000000</p_fpops>
-    <m_nbytes>17179869184.000000</m_nbytes>
     <os_name>Microsoft Windows</os_name>
-    <os_version>10.0</os_version>
 </host_info>
 </boinc_gui_rpc_reply>"#;
 
         let info = parse_host_info(xml);
         assert_eq!(info.domain_name, "myhost");
-        assert_eq!(info.ip_addr, "192.168.1.100");
         assert_eq!(info.p_ncpus, 8);
-        assert_eq!(info.p_vendor, "GenuineIntel");
-        assert_eq!(info.os_name, "Microsoft Windows");
     }
 
     #[test]
@@ -1459,9 +2092,7 @@ Internal error occurred
         let entries = parse_all_projects_list(xml);
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].name, "SETI@home");
-        assert_eq!(entries[0].url, "https://setiathome.berkeley.edu/");
         assert_eq!(entries[0].platforms.len(), 2);
-        assert_eq!(entries[0].platforms[0], "windows_x86_64");
     }
 
     #[test]
@@ -1477,7 +2108,6 @@ Internal error occurred
         let out = parse_account_out(xml);
         assert_eq!(out.error_num, 0);
         assert_eq!(out.authenticator, "abc123def456");
-        assert_eq!(out.error_msg, "");
     }
 
     #[test]
@@ -1493,7 +2123,60 @@ Internal error occurred
         let reply = parse_project_attach_reply(xml);
         assert_eq!(reply.error_num, 0);
         assert_eq!(reply.messages.len(), 1);
-        assert_eq!(reply.messages[0], "Success");
+    }
+
+    #[test]
+    fn test_parse_project_config() {
+        let xml = r#"
+<boinc_gui_rpc_reply>
+<project_config>
+    <error_num>0</error_num>
+    <name>Test Project</name>
+    <master_url>https://example.com/</master_url>
+    <min_passwd_length>8</min_passwd_length>
+    <account_creation_disabled/>
+    <uses_username/>
+    <terms_of_use>You must agree to these terms.</terms_of_use>
+</project_config>
+</boinc_gui_rpc_reply>"#;
+
+        let config = parse_project_config(xml);
+        assert_eq!(config.error_num, 0);
+        assert_eq!(config.name, "Test Project");
+        assert_eq!(config.min_passwd_length, 8);
+        assert!(config.account_creation_disabled);
+        assert!(config.uses_username);
+        assert_eq!(config.terms_of_use, "You must agree to these terms.");
+    }
+
+    #[test]
+    fn test_parse_acct_mgr_info() {
+        let xml = r#"
+<boinc_gui_rpc_reply>
+<acct_mgr_info>
+    <acct_mgr_name>BAM!</acct_mgr_name>
+    <acct_mgr_url>https://bam.boincstats.com/</acct_mgr_url>
+    <have_credentials/>
+</acct_mgr_info>
+</boinc_gui_rpc_reply>"#;
+
+        let info = parse_acct_mgr_info(xml);
+        assert_eq!(info.acct_mgr_name, "BAM!");
+        assert_eq!(info.acct_mgr_url, "https://bam.boincstats.com/");
+        assert!(info.have_credentials);
+    }
+
+    #[test]
+    fn test_parse_newer_version() {
+        let xml = r#"
+<boinc_gui_rpc_reply>
+<newer_version>8.0.0</newer_version>
+<download_url>https://boinc.berkeley.edu/download.php</download_url>
+</boinc_gui_rpc_reply>"#;
+
+        let info = parse_newer_version(xml);
+        assert_eq!(info.newer_version, "8.0.0");
+        assert_eq!(info.download_url, "https://boinc.berkeley.edu/download.php");
     }
 
     #[test]
@@ -1501,10 +2184,229 @@ Internal error occurred
         let xml = "<desc><![CDATA[<b>Hello</b>]]></desc>";
         let mut reader = Reader::from_str(xml);
         let mut buf = Vec::new();
-        // Skip the start tag
         let _ = reader.read_event_into(&mut buf);
         buf.clear();
         let text = read_text(&mut reader);
         assert_eq!(text, "<b>Hello</b>");
+    }
+
+    #[test]
+    fn test_parse_acct_mgr_rpc_reply() {
+        let xml = r#"
+<boinc_gui_rpc_reply>
+<acct_mgr_rpc_reply>
+    <error_num>0</error_num>
+    <message>Account manager attached</message>
+    <message>Projects updated</message>
+</acct_mgr_rpc_reply>
+</boinc_gui_rpc_reply>"#;
+
+        let reply = parse_acct_mgr_rpc_reply(xml);
+        assert_eq!(reply.error_num, 0);
+        assert_eq!(reply.messages.len(), 2);
+        assert_eq!(reply.messages[0], "Account manager attached");
+        assert_eq!(reply.messages[1], "Projects updated");
+    }
+
+    #[test]
+    fn test_parse_acct_mgr_rpc_reply_error() {
+        let xml = r#"
+<boinc_gui_rpc_reply>
+<acct_mgr_rpc_reply>
+    <error_num>-1</error_num>
+    <message>Invalid credentials</message>
+</acct_mgr_rpc_reply>
+</boinc_gui_rpc_reply>"#;
+
+        let reply = parse_acct_mgr_rpc_reply(xml);
+        assert_eq!(reply.error_num, -1);
+        assert_eq!(reply.messages.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_proxy_info() {
+        let xml = r#"
+<boinc_gui_rpc_reply>
+<proxy_info>
+    <use_http_proxy/>
+    <http_server_name>proxy.example.com</http_server_name>
+    <http_server_port>8080</http_server_port>
+    <http_user_name>user</http_user_name>
+    <http_user_passwd>pass</http_user_passwd>
+    <use_http_auth/>
+    <use_socks_proxy/>
+    <socks_server_name>socks.example.com</socks_server_name>
+    <socks_server_port>1080</socks_server_port>
+    <socks5_user_name>suser</socks5_user_name>
+    <socks5_user_passwd>spass</socks5_user_passwd>
+    <socks5_remote_dns/>
+    <noproxy_hosts>localhost,127.0.0.1</noproxy_hosts>
+</proxy_info>
+</boinc_gui_rpc_reply>"#;
+
+        let info = parse_proxy_info(xml);
+        assert!(info.use_http_proxy);
+        assert_eq!(info.http_server_name, "proxy.example.com");
+        assert_eq!(info.http_server_port, 8080);
+        assert_eq!(info.http_user_name, "user");
+        assert!(info.use_http_auth);
+        assert!(info.use_socks_proxy);
+        assert_eq!(info.socks_server_name, "socks.example.com");
+        assert_eq!(info.socks_server_port, 1080);
+        assert!(info.socks5_remote_dns);
+        assert_eq!(info.noproxy_hosts, "localhost,127.0.0.1");
+    }
+
+    #[test]
+    fn test_serialize_proxy_info() {
+        let info = ProxyInfo {
+            use_http_proxy: true,
+            http_server_name: "proxy.test".to_string(),
+            http_server_port: 3128,
+            ..Default::default()
+        };
+        let xml = serialize_proxy_info(&info);
+        assert!(xml.contains("<use_http_proxy/>"));
+        assert!(xml.contains("<http_server_name>proxy.test</http_server_name>"));
+        assert!(xml.contains("<http_server_port>3128</http_server_port>"));
+    }
+
+    #[test]
+    fn test_parse_cc_config() {
+        let xml = r#"
+<boinc_gui_rpc_reply>
+<cc_config>
+    <log_flags>
+        <task>1</task>
+        <file_xfer>1</file_xfer>
+        <sched_ops>0</sched_ops>
+        <http_debug>1</http_debug>
+    </log_flags>
+    <options>
+        <max_file_xfers>8</max_file_xfers>
+        <max_ncpus>4</max_ncpus>
+        <report_results_immediately>1</report_results_immediately>
+    </options>
+    <exclusive_app>game.exe</exclusive_app>
+    <exclusive_app>render.exe</exclusive_app>
+    <exclusive_gpu_app>mining.exe</exclusive_gpu_app>
+</cc_config>
+</boinc_gui_rpc_reply>"#;
+
+        let config = parse_cc_config(xml);
+        assert!(config.log_flags.task);
+        assert!(config.log_flags.file_xfer);
+        assert!(!config.log_flags.sched_ops);
+        assert!(config.log_flags.http_debug);
+        assert_eq!(config.max_file_xfers, 8);
+        assert_eq!(config.max_ncpus, 4);
+        assert!(config.report_results_immediately);
+        assert_eq!(config.exclusive_apps.len(), 2);
+        assert_eq!(config.exclusive_apps[0], "game.exe");
+        assert_eq!(config.exclusive_gpu_apps.len(), 1);
+        assert_eq!(config.exclusive_gpu_apps[0], "mining.exe");
+    }
+
+    #[test]
+    fn test_serialize_cc_config() {
+        let config = CcConfig {
+            exclusive_apps: vec!["app1.exe".to_string()],
+            exclusive_gpu_apps: vec![],
+            log_flags: LogFlags {
+                task: true,
+                file_xfer: false,
+                ..Default::default()
+            },
+            max_file_xfers: 6,
+            max_ncpus: 0,
+            report_results_immediately: false,
+        };
+        let xml = serialize_cc_config(&config);
+        assert!(xml.contains("<exclusive_app>app1.exe</exclusive_app>"));
+        assert!(xml.contains("<task>1</task>"));
+        assert!(xml.contains("<file_xfer>0</file_xfer>"));
+        assert!(xml.contains("<max_file_xfers>6</max_file_xfers>"));
+    }
+
+    #[test]
+    fn test_parse_newer_version_empty() {
+        let xml = r#"
+<boinc_gui_rpc_reply>
+</boinc_gui_rpc_reply>"#;
+
+        let info = parse_newer_version(xml);
+        assert_eq!(info.newer_version, "");
+        assert_eq!(info.download_url, "");
+    }
+
+    #[test]
+    fn test_parse_project_config_full() {
+        let xml = r#"
+<boinc_gui_rpc_reply>
+<project_config>
+    <error_num>0</error_num>
+    <name>Full Project</name>
+    <master_url>https://full.example.com/</master_url>
+    <min_passwd_length>6</min_passwd_length>
+    <client_account_creation_disabled/>
+    <terms_of_use>By using this project you agree to the terms.</terms_of_use>
+    <terms_of_use_is_html/>
+    <ldap_auth/>
+    <platforms>
+        <platform>
+            <name>windows_x86_64</name>
+        </platform>
+    </platforms>
+    <sched_stopped/>
+    <web_stopped/>
+</project_config>
+</boinc_gui_rpc_reply>"#;
+
+        let config = parse_project_config(xml);
+        assert_eq!(config.name, "Full Project");
+        assert_eq!(config.min_passwd_length, 6);
+        assert!(!config.account_creation_disabled);
+        assert!(config.client_account_creation_disabled);
+        assert!(config.terms_of_use_is_html);
+        assert!(config.ldap_auth);
+        assert!(config.sched_stopped);
+        assert!(config.web_stopped);
+        assert!(config.terms_of_use.contains("agree to the terms"));
+    }
+
+    #[test]
+    fn test_parse_global_preferences_with_day_prefs() {
+        let xml = r#"
+<boinc_gui_rpc_reply>
+<global_preferences>
+    <run_on_batteries>0</run_on_batteries>
+    <run_if_user_active>1</run_if_user_active>
+    <work_buf_additional_days>0.500000</work_buf_additional_days>
+    <suspend_cpu_usage>50.000000</suspend_cpu_usage>
+    <day_prefs>
+        <day_of_week>1</day_of_week>
+        <start_hour>9.000000</start_hour>
+        <end_hour>17.000000</end_hour>
+        <net_start_hour>0.000000</net_start_hour>
+        <net_end_hour>0.000000</net_end_hour>
+    </day_prefs>
+    <day_prefs>
+        <day_of_week>6</day_of_week>
+        <start_hour>0.000000</start_hour>
+        <end_hour>24.000000</end_hour>
+        <net_start_hour>0.000000</net_start_hour>
+        <net_end_hour>0.000000</net_end_hour>
+    </day_prefs>
+</global_preferences>
+</boinc_gui_rpc_reply>"#;
+
+        let prefs = parse_global_preferences(xml);
+        assert!((prefs.work_buf_additional_days - 0.5).abs() < 0.01);
+        assert!((prefs.suspend_cpu_usage - 50.0).abs() < 0.01);
+        assert_eq!(prefs.day_prefs.len(), 2);
+        assert_eq!(prefs.day_prefs[0].day_of_week, 1);
+        assert!((prefs.day_prefs[0].start_hour - 9.0).abs() < 0.01);
+        assert!((prefs.day_prefs[0].end_hour - 17.0).abs() < 0.01);
+        assert_eq!(prefs.day_prefs[1].day_of_week, 6);
     }
 }

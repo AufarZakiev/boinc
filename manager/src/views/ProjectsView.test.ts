@@ -21,6 +21,20 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     host_expavg_credit: 50,
     suspended_via_gui: false,
     dont_request_more_work: false,
+    resource_share: 100,
+    hostid: 0,
+    disk_usage: 0,
+    nrpc_failures: 0,
+    min_rpc_time: 0,
+    download_backoff: 0,
+    upload_backoff: 0,
+    sched_priority: 0,
+    duration_correction_factor: 1,
+    last_rpc_time: 0,
+    njobs_success: 0,
+    njobs_error: 0,
+    venue: "",
+    gui_urls: [],
     ...overrides,
   };
 }
@@ -49,10 +63,11 @@ describe("ProjectsView", () => {
     const wrapper = mount(ProjectsView);
     const rows = wrapper.findAll("tbody tr");
     expect(rows).toHaveLength(2);
-    expect(rows[0].text()).toContain("SETI@home");
-    expect(rows[0].text()).toContain("Active");
-    expect(rows[1].text()).toContain("Rosetta");
-    expect(rows[1].text()).toContain("Suspended");
+    // Alphabetical sort: Rosetta before SETI@home
+    expect(rows[0].text()).toContain("Rosetta");
+    expect(rows[0].text()).toContain("Suspended");
+    expect(rows[1].text()).toContain("SETI@home");
+    expect(rows[1].text()).toContain("Active");
   });
 
   it("shows action buttons when a project is selected", async () => {

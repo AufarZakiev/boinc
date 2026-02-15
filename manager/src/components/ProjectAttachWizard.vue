@@ -6,9 +6,14 @@ import {
   lookupAccountPoll,
   projectAttach,
   projectAttachPoll,
+  getProjectConfig,
+  getProjectConfigPoll,
+  createAccount,
+  createAccountPoll,
+  computePasswdHash,
 } from "../composables/useRpc";
+import type { ProjectListEntry, ProjectConfig } from "../types/boinc";
 import { useProjectsStore } from "../stores/projects";
-import type { ProjectListEntry } from "../types/boinc";
 
 const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ close: [] }>();
@@ -31,6 +36,12 @@ const password = ref("");
 
 // Result
 const resultMessage = ref("");
+
+const projectConfig = ref<ProjectConfig | null>(null);
+const userName = ref("");
+const teamName = ref("");
+const termsAccepted = ref(false);
+const authMode = ref<"login" | "create">("login");
 
 const filteredProjects = computed(() => {
   if (!search.value) return projectList.value;
@@ -66,13 +77,51 @@ async function loadProjects() {
 function selectProject(project: ProjectListEntry) {
   selectedProject.value = project;
   manualUrl.value = project.url;
-  step.value = 2;
+  fetchConfig();
 }
 
 function goToStep2Manual() {
   if (!manualUrl.value.trim()) return;
   selectedProject.value = null;
+  fetchConfig();
+}
+
+async function fetchConfig() {
   step.value = 2;
+  loading.value = true;
+  error.value = "";
+  projectConfig.value = null;
+
+  try {
+    const url = selectedProject.value?.url || manualUrl.value;
+    await getProjectConfig(url);
+
+    let attempts = 0;
+    let config;
+    while (attempts < 30) {
+      await new Promise((r) => setTimeout(r, 1000));
+      config = await getProjectConfigPoll();
+      if (config.error_num !== -204) break;
+      attempts++;
+    }
+
+    if (config && config.error_num === 0) {
+      projectConfig.value = config;
+      if (config.terms_of_use) {
+        step.value = 3;
+      } else {
+        step.value = 4;
+      }
+    } else {
+      // Skip config if it fails, go directly to credentials
+      step.value = 4;
+    }
+  } catch {
+    // Skip config on error, go directly to credentials
+    step.value = 4;
+  } finally {
+    loading.value = false;
+  }
 }
 
 async function doAttach() {
@@ -84,38 +133,61 @@ async function doAttach() {
   const url = selectedProject.value?.url || manualUrl.value;
   if (!url) return;
 
-  step.value = 3;
+  step.value = 5;
   error.value = "";
   loading.value = true;
 
   try {
-    // Start lookup account
-    await lookupAccount(url, email.value, password.value);
+    const passwdHash = await computePasswdHash(email.value, password.value);
 
-    // Poll for result
-    let attempts = 0;
-    let accountResult;
-    while (attempts < 30) {
-      await new Promise((r) => setTimeout(r, 1000));
-      accountResult = await lookupAccountPoll();
-      if (accountResult.error_num !== -204) break; // -204 = in progress
-      attempts++;
+    if (authMode.value === "create") {
+      // Create account flow
+      await createAccount(url, email.value, passwdHash, userName.value, teamName.value);
+
+      let attempts = 0;
+      let accountResult;
+      while (attempts < 30) {
+        await new Promise((r) => setTimeout(r, 1000));
+        accountResult = await createAccountPoll();
+        if (accountResult.error_num !== -204) break;
+        attempts++;
+      }
+
+      if (!accountResult || accountResult.error_num !== 0) {
+        error.value = accountResult?.error_msg || "Account creation failed";
+        step.value = 4;
+        loading.value = false;
+        return;
+      }
+
+      const name = selectedProject.value?.name || projectConfig.value?.name || "";
+      await projectAttach(url, accountResult.authenticator, name);
+    } else {
+      // Login flow
+      await lookupAccount(url, email.value, passwdHash);
+
+      let attempts = 0;
+      let accountResult;
+      while (attempts < 30) {
+        await new Promise((r) => setTimeout(r, 1000));
+        accountResult = await lookupAccountPoll();
+        if (accountResult.error_num !== -204) break;
+        attempts++;
+      }
+
+      if (!accountResult || accountResult.error_num !== 0) {
+        error.value = accountResult?.error_msg || "Account lookup failed";
+        step.value = 4;
+        loading.value = false;
+        return;
+      }
+
+      const name = selectedProject.value?.name || projectConfig.value?.name || "";
+      await projectAttach(url, accountResult.authenticator, name);
     }
-
-    if (!accountResult || accountResult.error_num !== 0) {
-      error.value =
-        accountResult?.error_msg || "Account lookup failed";
-      step.value = 2;
-      loading.value = false;
-      return;
-    }
-
-    // Start project attach
-    const name = selectedProject.value?.name || "";
-    await projectAttach(url, accountResult.authenticator, name);
 
     // Poll for attach result
-    attempts = 0;
+    let attempts = 0;
     let attachResult;
     while (attempts < 30) {
       await new Promise((r) => setTimeout(r, 1000));
@@ -126,16 +198,15 @@ async function doAttach() {
 
     if (attachResult && attachResult.error_num === 0) {
       resultMessage.value = "Successfully attached to project!";
-      step.value = 4;
+      step.value = 6;
       projects.fetchProjects();
     } else {
-      error.value =
-        attachResult?.messages?.join(", ") || "Attach failed";
-      step.value = 2;
+      error.value = attachResult?.messages?.join(", ") || "Attach failed";
+      step.value = 4;
     }
   } catch (e) {
     error.value = String(e);
-    step.value = 2;
+    step.value = 4;
   } finally {
     loading.value = false;
   }
@@ -150,6 +221,11 @@ function reset() {
   selectedProject.value = null;
   manualUrl.value = "";
   resultMessage.value = "";
+  projectConfig.value = null;
+  userName.value = "";
+  teamName.value = "";
+  termsAccepted.value = false;
+  authMode.value = "login";
   loadProjects();
 }
 
@@ -165,15 +241,12 @@ function close() {
       <div class="wizard">
         <div class="wizard-header">
           <h3>
-            {{
-              step === 1
-                ? "Add Project"
-                : step === 2
-                  ? "Account"
-                  : step === 3
-                    ? "Attaching..."
-                    : "Done"
-            }}
+            {{ step === 1 ? "Add Project"
+             : step === 2 ? "Loading..."
+             : step === 3 ? "Terms of Use"
+             : step === 4 ? "Account"
+             : step === 5 ? "Attaching..."
+             : "Done" }}
           </h3>
           <button class="close-btn" @click="close">&times;</button>
         </div>
@@ -221,10 +294,35 @@ function close() {
           </div>
         </div>
 
-        <!-- Step 2: Credentials -->
-        <div v-if="step === 2" class="wizard-body">
+        <!-- Step 2: Loading project config -->
+        <div v-if="step === 2" class="wizard-body wizard-center">
+          <div class="spinner"></div>
+          <p>Fetching project configuration...</p>
+        </div>
+
+        <!-- Step 3: Terms of use -->
+        <div v-if="step === 3" class="wizard-body">
+          <div class="terms-box" v-if="projectConfig?.terms_of_use_is_html" v-html="projectConfig?.terms_of_use"></div>
+          <pre v-else class="terms-box terms-text">{{ projectConfig?.terms_of_use }}</pre>
+          <label class="terms-accept">
+            <input v-model="termsAccepted" type="checkbox" />
+            <span>I accept the terms of use</span>
+          </label>
+          <div class="wizard-actions">
+            <button class="btn" @click="step = 1">Back</button>
+            <button class="btn btn-primary" :disabled="!termsAccepted" @click="step = 4">Continue</button>
+          </div>
+        </div>
+
+        <!-- Step 4: Credentials -->
+        <div v-if="step === 4" class="wizard-body">
           <div class="cred-project">
-            {{ selectedProject?.name || manualUrl }}
+            {{ selectedProject?.name || projectConfig?.name || manualUrl }}
+          </div>
+
+          <div v-if="!projectConfig?.account_creation_disabled" class="auth-tabs">
+            <button class="auth-tab" :class="{ active: authMode === 'login' }" @click="authMode = 'login'">Login</button>
+            <button class="auth-tab" :class="{ active: authMode === 'create' }" @click="authMode = 'create'">Create Account</button>
           </div>
 
           <div v-if="error" class="wizard-error">{{ error }}</div>
@@ -237,21 +335,33 @@ function close() {
             <span>Password</span>
             <input v-model="password" type="password" />
           </label>
+          <template v-if="authMode === 'create'">
+            <label class="field">
+              <span>{{ projectConfig?.uses_username ? "Username" : "Name" }}</span>
+              <input v-model="userName" type="text" />
+            </label>
+            <label class="field">
+              <span>Team name (optional)</span>
+              <input v-model="teamName" type="text" />
+            </label>
+          </template>
 
           <div class="wizard-actions">
-            <button class="btn" @click="step = 1">Back</button>
-            <button class="btn btn-primary" @click="doAttach">Attach</button>
+            <button class="btn" @click="step = projectConfig?.terms_of_use ? 3 : 1">Back</button>
+            <button class="btn btn-primary" @click="doAttach">
+              {{ authMode === 'create' ? 'Create &amp; Attach' : 'Attach' }}
+            </button>
           </div>
         </div>
 
-        <!-- Step 3: Progress -->
-        <div v-if="step === 3" class="wizard-body wizard-center">
+        <!-- Step 5: Progress -->
+        <div v-if="step === 5" class="wizard-body wizard-center">
           <div class="spinner"></div>
           <p>Attaching to project...</p>
         </div>
 
-        <!-- Step 4: Success -->
-        <div v-if="step === 4" class="wizard-body wizard-center">
+        <!-- Step 6: Success -->
+        <div v-if="step === 6" class="wizard-body wizard-center">
           <div class="success-icon">&#10003;</div>
           <p>{{ resultMessage }}</p>
           <button class="btn btn-primary" @click="close">Done</button>
@@ -486,5 +596,63 @@ function close() {
   justify-content: center;
   font-size: 24px;
   font-weight: 700;
+}
+
+.terms-box {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin-bottom: var(--space-md);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  background: var(--color-bg-secondary);
+}
+
+.terms-text {
+  white-space: pre-wrap;
+  font-family: inherit;
+}
+
+.terms-accept {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--font-size-md);
+  margin-bottom: var(--space-md);
+  cursor: pointer;
+}
+
+.terms-accept input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-accent);
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 8px 16px;
+  border: none;
+  background: var(--color-bg);
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.auth-tab.active {
+  background: var(--color-accent);
+  color: white;
 }
 </style>

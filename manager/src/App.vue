@@ -5,11 +5,16 @@ import { useConnectionStore } from "./stores/connection";
 import ActivityControls from "./components/ActivityControls.vue";
 import PreferencesDialog from "./components/PreferencesDialog.vue";
 import AboutDialog from "./components/AboutDialog.vue";
+import StatusBar from "./components/StatusBar.vue";
+import AccountManagerWizard from "./components/AccountManagerWizard.vue";
+import SelectComputerDialog from "./components/SelectComputerDialog.vue";
 
 const connection = useConnectionStore();
 const route = useRoute();
 const showPreferences = ref(false);
 const showAbout = ref(false);
+const showAcctMgr = ref(false);
+const showSelectComputer = ref(false);
 
 const navGroups = [
   {
@@ -118,6 +123,16 @@ watch(
       <div class="sidebar-footer">
         <ActivityControls />
         <div class="sidebar-actions">
+          <button class="sidebar-action-btn" title="Select Computer" @click="showSelectComputer = true">
+            <svg viewBox="0 0 20 20" fill="currentColor" width="18" height="18">
+              <path fill-rule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm11 1H6v3h8V6zM6 15a1 1 0 100 2h8a1 1 0 100-2H6z" clip-rule="evenodd" />
+            </svg>
+          </button>
+          <button class="sidebar-action-btn" title="Account Manager" @click="showAcctMgr = true">
+            <svg viewBox="0 0 20 20" fill="currentColor" width="18" height="18">
+              <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+            </svg>
+          </button>
           <button class="sidebar-action-btn" title="Preferences" @click="showPreferences = true">
             <svg viewBox="0 0 20 20" fill="currentColor" width="18" height="18">
               <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
@@ -135,11 +150,21 @@ watch(
       <router-view />
     </main>
 
+    <StatusBar v-if="connection.state === 'Connected'" />
+
     <PreferencesDialog
       :open="showPreferences"
       @close="showPreferences = false"
     />
     <AboutDialog :open="showAbout" @close="showAbout = false" />
+    <AccountManagerWizard
+      :open="showAcctMgr"
+      @close="showAcctMgr = false"
+    />
+    <SelectComputerDialog
+      :open="showSelectComputer"
+      @close="showSelectComputer = false"
+    />
   </div>
 </template>
 
@@ -178,7 +203,7 @@ body {
 
 .btn:hover {
   background: var(--color-bg-secondary);
-  border-color: #d1d5db;
+  border-color: var(--color-border);
 }
 
 .btn-primary {
@@ -194,11 +219,16 @@ body {
 
 .btn-danger {
   color: var(--color-danger);
-  border-color: #fca5a5;
+  border-color: var(--color-danger);
 }
 
 .btn-danger:hover {
   background: var(--color-danger-light);
+}
+
+/* Global input dark mode support */
+input, textarea, select {
+  color-scheme: light dark;
 }
 </style>
 
@@ -216,6 +246,7 @@ body {
 
 .main-content {
   flex: 1;
+  padding-bottom: 28px;
 }
 
 /* ── Sidebar ──────────────────────────────────────────────────── */
