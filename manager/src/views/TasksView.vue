@@ -8,12 +8,25 @@ import {
   SCHEDULER_STATE,
 } from "../types/boinc";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
+import PageHeader from "../components/PageHeader.vue";
+import DataTable from "../components/DataTable.vue";
+import EmptyState from "../components/EmptyState.vue";
+import StatusBadge from "../components/StatusBadge.vue";
 
 const store = useTasksStore();
 
 const selectedNames = ref<Set<string>>(new Set());
 const lastClickedIndex = ref<number | null>(null);
 const confirmAbort = ref(false);
+
+const columns = [
+  { key: "task", label: "Task" },
+  { key: "project", label: "Project" },
+  { key: "progress", label: "Progress" },
+  { key: "elapsed", label: "Elapsed" },
+  { key: "remaining", label: "Remaining" },
+  { key: "status", label: "Status" },
+];
 
 function formatTime(seconds: number): string {
   if (seconds <= 0) return "---";
@@ -51,6 +64,27 @@ function taskStatus(task: {
       return "Suspended";
   }
   return "Waiting";
+}
+
+function statusVariant(status: string): "default" | "success" | "warning" | "danger" | "info" {
+  switch (status) {
+    case "Running":
+      return "success";
+    case "Waiting to run":
+    case "Waiting":
+    case "Downloading":
+    case "Uploading":
+      return "info";
+    case "Suspended":
+      return "warning";
+    case "Computation error":
+    case "Aborted":
+      return "danger";
+    case "Ready to report":
+      return "default";
+    default:
+      return "default";
+  }
 }
 
 const sortedTasks = computed(() =>
@@ -125,65 +159,62 @@ async function doAbort() {
 
 <template>
   <div class="tasks-view">
-    <div class="toolbar">
-      <h2>Tasks</h2>
-      <div v-if="hasSelection" class="actions">
+    <PageHeader title="Tasks">
+      <template v-if="hasSelection">
         <button class="btn" @click="handleSuspendResume">
           {{ suspendResumeLabel }}
         </button>
         <button class="btn btn-danger" @click="confirmAbort = true">
           Abort
         </button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <p v-if="store.error" class="error">{{ store.error }}</p>
-    <p v-else-if="store.loading && store.tasks.length === 0" class="loading">
-      Loading tasks...
-    </p>
-    <p v-else-if="store.tasks.length === 0" class="empty">
-      No tasks. Attach a project to start computing.
-    </p>
 
-    <table v-if="store.tasks.length > 0" class="task-table">
-      <thead>
-        <tr>
-          <th>Task</th>
-          <th>Project</th>
-          <th>Progress</th>
-          <th>Elapsed</th>
-          <th>Remaining</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="(task, index) in sortedTasks"
-          :key="task.name"
-          :class="{ 'row-selected': isSelected(task) }"
-          @click="handleRowClick(task, index, $event)"
-        >
-          <td class="col-name" :title="task.name">{{ task.wu_name }}</td>
-          <td class="col-project">{{ task.project_url }}</td>
-          <td class="col-progress">
-            <div class="progress-bar">
-              <div
-                class="progress-fill"
-                :style="{ width: formatPercent(task.fraction_done) }"
-              ></div>
-              <span class="progress-text">{{
-                formatPercent(task.fraction_done)
-              }}</span>
-            </div>
-          </td>
-          <td class="col-time">{{ formatTime(task.elapsed_time) }}</td>
-          <td class="col-time">
-            {{ formatTime(task.estimated_cpu_time_remaining) }}
-          </td>
-          <td class="col-status">{{ taskStatus(task) }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <EmptyState
+      v-else-if="store.loading && store.tasks.length === 0"
+      icon="&#8987;"
+      message="Loading tasks..."
+    />
+
+    <EmptyState
+      v-else-if="store.tasks.length === 0"
+      icon="&#128203;"
+      message="No tasks. Attach a project to start computing."
+    />
+
+    <DataTable v-if="store.tasks.length > 0" :columns="columns">
+      <tr
+        v-for="(task, index) in sortedTasks"
+        :key="task.name"
+        :class="{ 'row-selected': isSelected(task) }"
+        @click="handleRowClick(task, index, $event)"
+      >
+        <td class="col-name" :title="task.name">{{ task.wu_name }}</td>
+        <td class="col-project">{{ task.project_url }}</td>
+        <td class="col-progress">
+          <div class="progress-bar">
+            <div
+              class="progress-fill"
+              :style="{ width: formatPercent(task.fraction_done) }"
+            ></div>
+            <span class="progress-text">{{
+              formatPercent(task.fraction_done)
+            }}</span>
+          </div>
+        </td>
+        <td class="col-time">{{ formatTime(task.elapsed_time) }}</td>
+        <td class="col-time">
+          {{ formatTime(task.estimated_cpu_time_remaining) }}
+        </td>
+        <td>
+          <StatusBadge :variant="statusVariant(taskStatus(task))">
+            {{ taskStatus(task) }}
+          </StatusBadge>
+        </td>
+      </tr>
+    </DataTable>
 
     <ConfirmDialog
       :open="confirmAbort"
@@ -198,87 +229,12 @@ async function doAbort() {
 
 <style scoped>
 .tasks-view {
-  padding: 16px;
-}
-
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.actions {
-  display: flex;
-  gap: 6px;
-}
-
-.btn {
-  padding: 5px 12px;
-  border: 1px solid #cbd5e0;
-  border-radius: 4px;
-  background: #fff;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.btn:hover {
-  background: #f7fafc;
-}
-
-.btn-danger {
-  color: #e53e3e;
-  border-color: #feb2b2;
-}
-
-.btn-danger:hover {
-  background: #fff5f5;
+  padding: var(--space-lg);
 }
 
 .error {
-  color: #e53e3e;
-}
-.loading,
-.empty {
-  color: #718096;
-}
-
-.task-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.task-table th {
-  text-align: left;
-  padding: 8px;
-  border-bottom: 2px solid #e2e8f0;
-  font-weight: 600;
-  color: #4a5568;
-  white-space: nowrap;
-}
-
-.task-table td {
-  padding: 6px 8px;
-  border-bottom: 1px solid #edf2f7;
-}
-
-.task-table tbody tr {
-  cursor: pointer;
-}
-
-.task-table tbody tr:hover {
-  background: #f7fafc;
-}
-
-.row-selected {
-  background: #ebf8ff !important;
+  color: var(--color-danger);
+  font-size: var(--font-size-md);
 }
 
 .col-name {
@@ -293,8 +249,8 @@ h2 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #718096;
-  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .col-time {
@@ -302,23 +258,19 @@ h2 {
   white-space: nowrap;
 }
 
-.col-status {
-  white-space: nowrap;
-}
-
 .progress-bar {
   position: relative;
   width: 120px;
   height: 18px;
-  background: #edf2f7;
-  border-radius: 3px;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: #4299e1;
-  transition: width 0.3s ease;
+  background: var(--color-accent);
+  transition: width var(--transition-normal);
 }
 
 .progress-text {
@@ -327,8 +279,8 @@ h2 {
   left: 0;
   right: 0;
   text-align: center;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   line-height: 18px;
-  color: #2d3748;
+  color: var(--color-text-primary);
 }
 </style>

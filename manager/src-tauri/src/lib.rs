@@ -1,6 +1,10 @@
 mod rpc;
 
-use rpc::{CcStatus, ConnectionState, FileTransfer, Project, RpcClient, TaskResult};
+use rpc::{
+    AccountOut, CcStatus, ConnectionState, DiskUsage, FileTransfer, GlobalPreferences, HostInfo,
+    Message, Notice, Project, ProjectAttachReply, ProjectListEntry, ProjectStatistics, RpcClient,
+    TaskResult,
+};
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
@@ -274,6 +278,133 @@ async fn shutdown_client(state: State<'_, AppState>) -> Result<(), String> {
     client.quit().await
 }
 
+// ── Statistics ──────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_statistics(
+    state: State<'_, AppState>,
+) -> Result<Vec<ProjectStatistics>, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_statistics().await
+}
+
+// ── Messages ────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_messages(
+    state: State<'_, AppState>,
+    seqno: i32,
+) -> Result<Vec<Message>, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_messages(seqno).await
+}
+
+// ── Notices ─────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_notices(
+    state: State<'_, AppState>,
+    seqno: i32,
+) -> Result<Vec<Notice>, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_notices(seqno).await
+}
+
+// ── Disk usage ──────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_disk_usage(state: State<'_, AppState>) -> Result<DiskUsage, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_disk_usage().await
+}
+
+// ── Preferences ─────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_preferences(
+    state: State<'_, AppState>,
+) -> Result<GlobalPreferences, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_global_prefs_override().await
+}
+
+#[tauri::command]
+async fn set_preferences(
+    state: State<'_, AppState>,
+    prefs: GlobalPreferences,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.set_global_prefs_override(&prefs).await
+}
+
+// ── Host info ───────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_host_info(state: State<'_, AppState>) -> Result<HostInfo, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_host_info().await
+}
+
+// ── Project attach ──────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_all_projects_list(
+    state: State<'_, AppState>,
+) -> Result<Vec<ProjectListEntry>, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_all_projects_list().await
+}
+
+#[tauri::command]
+async fn lookup_account(
+    state: State<'_, AppState>,
+    url: String,
+    email: String,
+    password: String,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.lookup_account(&url, &email, &password).await
+}
+
+#[tauri::command]
+async fn lookup_account_poll(
+    state: State<'_, AppState>,
+) -> Result<AccountOut, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.lookup_account_poll().await
+}
+
+#[tauri::command]
+async fn project_attach(
+    state: State<'_, AppState>,
+    url: String,
+    authenticator: String,
+    name: String,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.project_attach(&url, &authenticator, &name).await
+}
+
+#[tauri::command]
+async fn project_attach_poll(
+    state: State<'_, AppState>,
+) -> Result<ProjectAttachReply, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.project_attach_poll().await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -308,6 +439,18 @@ pub fn run() {
             run_benchmarks,
             retry_pending_transfers,
             shutdown_client,
+            get_statistics,
+            get_messages,
+            get_notices,
+            get_disk_usage,
+            get_preferences,
+            set_preferences,
+            get_host_info,
+            get_all_projects_list,
+            lookup_account,
+            lookup_account_poll,
+            project_attach,
+            project_attach_poll,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

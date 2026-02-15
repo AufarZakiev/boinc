@@ -104,3 +104,128 @@ export const SCHEDULER_STATE = {
   PREEMPTED: 1,
   SCHEDULED: 2,
 } as const;
+
+/** A single day's statistics for a project. */
+export interface DailyStats {
+  day: number;
+  user_total_credit: number;
+  user_expavg_credit: number;
+  host_total_credit: number;
+  host_expavg_credit: number;
+}
+
+/** Statistics for a single project. */
+export interface ProjectStatistics {
+  master_url: string;
+  daily_statistics: DailyStats[];
+}
+
+/** A BOINC message (event log entry). */
+export interface Message {
+  project: string;
+  priority: number;
+  seqno: number;
+  body: string;
+  timestamp: number;
+}
+
+/** Message priority levels. */
+export const MSG_PRIORITY = {
+  INFO: 1,
+  USER_ALERT: 2,
+  INTERNAL_ERROR: 3,
+} as const;
+
+/** A BOINC notice. */
+export interface Notice {
+  seqno: number;
+  title: string;
+  description: string;
+  create_time: number;
+  project_name: string;
+  link: string;
+  category: string;
+  is_private: boolean;
+}
+
+/** Disk usage for a single project. */
+export interface DiskUsageProject {
+  master_url: string;
+  disk_usage: number;
+}
+
+/** Overall disk usage summary. */
+export interface DiskUsage {
+  projects: DiskUsageProject[];
+  d_total: number;
+  d_free: number;
+  d_boinc: number;
+  d_allowed: number;
+}
+
+/** Global preferences. */
+export interface GlobalPreferences {
+  run_on_batteries: boolean;
+  run_if_user_active: boolean;
+  idle_time_to_run: number;
+  max_ncpus_pct: number;
+  cpu_usage_limit: number;
+  ram_max_used_busy_frac: number;
+  ram_max_used_idle_frac: number;
+  max_bytes_sec_down: number;
+  max_bytes_sec_up: number;
+  daily_xfer_limit_mb: number;
+  disk_max_used_gb: number;
+  disk_max_used_pct: number;
+  disk_min_free_gb: number;
+  work_buf_min_days: number;
+  cpu_scheduling_period_minutes: number;
+  start_hour: number;
+  end_hour: number;
+  net_start_hour: number;
+  net_end_hour: number;
+}
+
+/** Host information. */
+export interface HostInfo {
+  domain_name: string;
+  ip_addr: string;
+  p_ncpus: number;
+  p_vendor: string;
+  p_model: string;
+  p_fpops: number;
+  p_iops: number;
+  m_nbytes: number;
+  m_cache: number;
+  m_swap: number;
+  d_total: number;
+  d_free: number;
+  os_name: string;
+  os_version: string;
+  product_name: string;
+  virtualbox_version: string;
+}
+
+/** Entry in the all-projects list. */
+export interface ProjectListEntry {
+  name: string;
+  url: string;
+  general_area: string;
+  specific_area: string;
+  description: string;
+  home: string;
+  platforms: string[];
+}
+
+/** Result of an account lookup. */
+export interface AccountOut {
+  error_num: number;
+  authenticator: string;
+  error_msg: string;
+}
+
+/** Result of a project attach operation. */
+export interface ProjectAttachReply {
+  error_num: number;
+  messages: string[];
+}

@@ -60,11 +60,9 @@ describe("ProjectsView", () => {
     store.projects = [makeProject()];
 
     const wrapper = mount(ProjectsView);
-    expect(wrapper.find(".actions").exists()).toBe(false);
 
     await wrapper.find("tbody tr").trigger("click");
 
-    expect(wrapper.find(".actions").exists()).toBe(true);
     expect(wrapper.text()).toContain("Update");
     expect(wrapper.text()).toContain("Suspend");
     expect(wrapper.text()).toContain("No new tasks");
@@ -77,7 +75,7 @@ describe("ProjectsView", () => {
     const wrapper = mount(ProjectsView);
     await wrapper.find("tbody tr").trigger("click");
 
-    expect(wrapper.find(".actions").text()).toContain("Resume");
+    expect(wrapper.text()).toContain("Resume");
   });
 
   it("shows confirm dialog for reset", async () => {

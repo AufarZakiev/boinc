@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "BOINC Manager",
+        "title": "BOINC",
         "width": 1024,
         "height": 700
       }

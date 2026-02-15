@@ -1,5 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { TaskResult, Project, CcStatus, FileTransfer } from "../types/boinc";
+import type {
+  TaskResult,
+  Project,
+  CcStatus,
+  FileTransfer,
+  ProjectStatistics,
+  Message,
+  Notice,
+  DiskUsage,
+  GlobalPreferences,
+  HostInfo,
+  ProjectListEntry,
+  AccountOut,
+  ProjectAttachReply,
+} from "../types/boinc";
 
 /**
  * Thin wrappers around Tauri invoke() calls to the Rust backend.
@@ -150,4 +164,76 @@ export async function retryPendingTransfers(): Promise<void> {
 
 export async function shutdownClient(): Promise<void> {
   return invoke("shutdown_client");
+}
+
+// ── Statistics ───────────────────────────────────────────────────
+
+export async function getStatistics(): Promise<ProjectStatistics[]> {
+  return invoke("get_statistics");
+}
+
+// ── Messages ─────────────────────────────────────────────────────
+
+export async function getMessages(seqno: number): Promise<Message[]> {
+  return invoke("get_messages", { seqno });
+}
+
+// ── Notices ──────────────────────────────────────────────────────
+
+export async function getNotices(seqno: number): Promise<Notice[]> {
+  return invoke("get_notices", { seqno });
+}
+
+// ── Disk usage ───────────────────────────────────────────────────
+
+export async function getDiskUsage(): Promise<DiskUsage> {
+  return invoke("get_disk_usage");
+}
+
+// ── Preferences ──────────────────────────────────────────────────
+
+export async function getPreferences(): Promise<GlobalPreferences> {
+  return invoke("get_preferences");
+}
+
+export async function setPreferences(
+  prefs: GlobalPreferences,
+): Promise<void> {
+  return invoke("set_preferences", { prefs });
+}
+
+// ── Host info ────────────────────────────────────────────────────
+
+export async function getHostInfo(): Promise<HostInfo> {
+  return invoke("get_host_info");
+}
+
+// ── Project attach ───────────────────────────────────────────────
+
+export async function getAllProjectsList(): Promise<ProjectListEntry[]> {
+  return invoke("get_all_projects_list");
+}
+
+export async function lookupAccount(
+  url: string,
+  email: string,
+  password: string,
+): Promise<void> {
+  return invoke("lookup_account", { url, email, password });
+}
+
+export async function lookupAccountPoll(): Promise<AccountOut> {
+  return invoke("lookup_account_poll");
+}
+
+export async function projectAttach(
+  url: string,
+  authenticator: string,
+  name: string,
+): Promise<void> {
+  return invoke("project_attach", { url, authenticator, name });
+}
+
+export async function projectAttachPoll(): Promise<ProjectAttachReply> {
+  return invoke("project_attach_poll");
 }

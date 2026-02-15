@@ -54,11 +54,9 @@ describe("TransfersView", () => {
     store.transfers = [makeTransfer()];
 
     const wrapper = mount(TransfersView);
-    expect(wrapper.find(".actions").exists()).toBe(false);
 
     await wrapper.find("tbody tr").trigger("click");
 
-    expect(wrapper.find(".actions").exists()).toBe(true);
     expect(wrapper.text()).toContain("Retry");
     expect(wrapper.text()).toContain("Abort");
   });

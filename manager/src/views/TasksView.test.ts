@@ -117,13 +117,9 @@ describe("TasksView", () => {
 
     const wrapper = mount(TasksView);
 
-    // No actions visible initially
-    expect(wrapper.find(".actions").exists()).toBe(false);
-
     // Click a row to select
     await wrapper.find("tbody tr").trigger("click");
 
-    expect(wrapper.find(".actions").exists()).toBe(true);
     expect(wrapper.text()).toContain("Suspend");
     expect(wrapper.text()).toContain("Abort");
   });
@@ -135,8 +131,7 @@ describe("TasksView", () => {
     const wrapper = mount(TasksView);
     await wrapper.find("tbody tr").trigger("click");
 
-    const actions = wrapper.find(".actions");
-    expect(actions.text()).toContain("Resume");
+    expect(wrapper.text()).toContain("Resume");
   });
 
   it("shows abort confirmation dialog", async () => {

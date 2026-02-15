@@ -3,11 +3,23 @@ import { ref } from "vue";
 import { useTransfersStore } from "../stores/transfers";
 import type { FileTransfer } from "../types/boinc";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
+import PageHeader from "../components/PageHeader.vue";
+import DataTable from "../components/DataTable.vue";
+import EmptyState from "../components/EmptyState.vue";
 
 const store = useTransfersStore();
 
 const selected = ref<FileTransfer | null>(null);
 const confirmAbort = ref(false);
+
+const columns = [
+  { key: "file", label: "File" },
+  { key: "project", label: "Project" },
+  { key: "direction", label: "Direction" },
+  { key: "progress", label: "Progress" },
+  { key: "size", label: "Size", align: "right" as const },
+  { key: "speed", label: "Speed", align: "right" as const },
+];
 
 function selectTransfer(transfer: FileTransfer) {
   selected.value =
@@ -60,57 +72,50 @@ async function doAbort() {
 
 <template>
   <div class="transfers-view">
-    <div class="toolbar">
-      <h2>Transfers</h2>
-      <div v-if="selected" class="actions">
+    <PageHeader title="Transfers">
+      <template v-if="selected">
         <button class="btn" @click="handleRetry">Retry</button>
         <button class="btn btn-danger" @click="confirmAbort = true">Abort</button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <p v-if="store.error" class="error">{{ store.error }}</p>
-    <p v-else-if="store.loading && store.transfers.length === 0" class="loading">
-      Loading transfers...
-    </p>
-    <p v-else-if="store.transfers.length === 0" class="empty">
-      No active file transfers.
-    </p>
 
-    <table v-if="store.transfers.length > 0" class="data-table">
-      <thead>
-        <tr>
-          <th>File</th>
-          <th>Project</th>
-          <th>Direction</th>
-          <th>Progress</th>
-          <th>Size</th>
-          <th>Speed</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="transfer in store.transfers"
-          :key="`${transfer.project_url}:${transfer.name}`"
-          :class="{ 'row-selected': isSelected(transfer) }"
-          @click="selectTransfer(transfer)"
-        >
-          <td class="col-name" :title="transfer.name">{{ transfer.name }}</td>
-          <td>{{ transfer.project_name }}</td>
-          <td>{{ transferDirection(transfer) }}</td>
-          <td class="col-progress">
-            <div class="progress-bar">
-              <div
-                class="progress-fill"
-                :style="{ width: transferProgress(transfer) }"
-              ></div>
-              <span class="progress-text">{{ transferProgress(transfer) }}</span>
-            </div>
-          </td>
-          <td class="col-number">{{ formatSize(transfer.nbytes) }}</td>
-          <td class="col-number">{{ formatSpeed(transfer.xfer_speed) }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <EmptyState
+      v-else-if="store.loading && store.transfers.length === 0"
+      icon="&#8987;"
+      message="Loading transfers..."
+    />
+
+    <EmptyState
+      v-else-if="store.transfers.length === 0"
+      icon="&#128259;"
+      message="No active file transfers."
+    />
+
+    <DataTable v-if="store.transfers.length > 0" :columns="columns">
+      <tr
+        v-for="transfer in store.transfers"
+        :key="`${transfer.project_url}:${transfer.name}`"
+        :class="{ 'row-selected': isSelected(transfer) }"
+        @click="selectTransfer(transfer)"
+      >
+        <td class="col-name" :title="transfer.name">{{ transfer.name }}</td>
+        <td>{{ transfer.project_name }}</td>
+        <td>{{ transferDirection(transfer) }}</td>
+        <td class="col-progress">
+          <div class="progress-bar">
+            <div
+              class="progress-fill"
+              :style="{ width: transferProgress(transfer) }"
+            ></div>
+            <span class="progress-text">{{ transferProgress(transfer) }}</span>
+          </div>
+        </td>
+        <td class="col-number">{{ formatSize(transfer.nbytes) }}</td>
+        <td class="col-number">{{ formatSpeed(transfer.xfer_speed) }}</td>
+      </tr>
+    </DataTable>
 
     <ConfirmDialog
       :open="confirmAbort"
@@ -125,87 +130,12 @@ async function doAbort() {
 
 <style scoped>
 .transfers-view {
-  padding: 16px;
-}
-
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.actions {
-  display: flex;
-  gap: 6px;
-}
-
-.btn {
-  padding: 5px 12px;
-  border: 1px solid #cbd5e0;
-  border-radius: 4px;
-  background: #fff;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.btn:hover {
-  background: #f7fafc;
-}
-
-.btn-danger {
-  color: #e53e3e;
-  border-color: #feb2b2;
-}
-
-.btn-danger:hover {
-  background: #fff5f5;
+  padding: var(--space-lg);
 }
 
 .error {
-  color: #e53e3e;
-}
-.loading,
-.empty {
-  color: #718096;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.data-table th {
-  text-align: left;
-  padding: 8px;
-  border-bottom: 2px solid #e2e8f0;
-  font-weight: 600;
-  color: #4a5568;
-  white-space: nowrap;
-}
-
-.data-table td {
-  padding: 6px 8px;
-  border-bottom: 1px solid #edf2f7;
-}
-
-.data-table tbody tr {
-  cursor: pointer;
-}
-
-.data-table tbody tr:hover {
-  background: #f7fafc;
-}
-
-.row-selected {
-  background: #ebf8ff !important;
+  color: var(--color-danger);
+  font-size: var(--font-size-md);
 }
 
 .col-name {
@@ -229,15 +159,15 @@ h2 {
   position: relative;
   width: 120px;
   height: 18px;
-  background: #edf2f7;
-  border-radius: 3px;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: #4299e1;
-  transition: width 0.3s ease;
+  background: var(--color-accent);
+  transition: width var(--transition-normal);
 }
 
 .progress-text {
@@ -246,8 +176,8 @@ h2 {
   left: 0;
   right: 0;
   text-align: center;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   line-height: 18px;
-  color: #2d3748;
+  color: var(--color-text-primary);
 }
 </style>

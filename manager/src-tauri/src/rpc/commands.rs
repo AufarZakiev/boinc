@@ -1,5 +1,8 @@
 use super::connection::RpcClient;
-use super::types::{CcStatus, FileTransfer, Project, TaskResult};
+use super::types::{
+    AccountOut, CcStatus, DiskUsage, FileTransfer, GlobalPreferences, HostInfo, Message, Notice,
+    Project, ProjectAttachReply, ProjectListEntry, ProjectStatistics, TaskResult,
+};
 use super::xml_parse;
 
 /// High-level RPC commands that return typed data.
@@ -154,5 +157,118 @@ impl RpcClient {
     pub async fn quit(&self) -> Result<(), String> {
         let xml = self.rpc_call("<quit/>").await?;
         xml_parse::parse_success(&xml)
+    }
+
+    // ── Statistics ─────────────────────────────────────────────────
+
+    pub async fn get_statistics(&self) -> Result<Vec<ProjectStatistics>, String> {
+        let xml = self.rpc_call("<get_statistics/>").await?;
+        Ok(xml_parse::parse_statistics(&xml))
+    }
+
+    // ── Messages ──────────────────────────────────────────────────
+
+    pub async fn get_messages(&self, seqno: i32) -> Result<Vec<Message>, String> {
+        let req = format!(
+            "<get_messages>\n<seqno>{seqno}</seqno>\n</get_messages>"
+        );
+        let xml = self.rpc_call(&req).await?;
+        Ok(xml_parse::parse_messages(&xml))
+    }
+
+    // ── Notices ───────────────────────────────────────────────────
+
+    pub async fn get_notices(&self, seqno: i32) -> Result<Vec<Notice>, String> {
+        let req = format!(
+            "<get_notices>\n<seqno>{seqno}</seqno>\n</get_notices>"
+        );
+        let xml = self.rpc_call(&req).await?;
+        Ok(xml_parse::parse_notices(&xml))
+    }
+
+    // ── Disk usage ────────────────────────────────────────────────
+
+    pub async fn get_disk_usage(&self) -> Result<DiskUsage, String> {
+        let xml = self.rpc_call("<get_disk_usage/>").await?;
+        Ok(xml_parse::parse_disk_usage(&xml))
+    }
+
+    // ── Preferences ───────────────────────────────────────────────
+
+    pub async fn get_global_prefs_override(&self) -> Result<GlobalPreferences, String> {
+        let xml = self.rpc_call("<get_global_prefs_override/>").await?;
+        Ok(xml_parse::parse_global_preferences(&xml))
+    }
+
+    pub async fn set_global_prefs_override(
+        &self,
+        prefs: &GlobalPreferences,
+    ) -> Result<(), String> {
+        let prefs_xml = xml_parse::serialize_global_preferences(prefs);
+        let req = format!(
+            "<set_global_prefs_override>\n{prefs_xml}\n</set_global_prefs_override>"
+        );
+        self.rpc_call(&req).await?;
+        // Tell the client to re-read the override file
+        let xml = self.rpc_call("<read_global_prefs_override/>").await?;
+        xml_parse::parse_success(&xml)
+    }
+
+    // ── Host info ─────────────────────────────────────────────────
+
+    pub async fn get_host_info(&self) -> Result<HostInfo, String> {
+        let xml = self.rpc_call("<get_host_info/>").await?;
+        Ok(xml_parse::parse_host_info(&xml))
+    }
+
+    // ── Project attach ────────────────────────────────────────────
+
+    pub async fn get_all_projects_list(&self) -> Result<Vec<ProjectListEntry>, String> {
+        let xml = self.rpc_call("<get_all_projects_list/>").await?;
+        Ok(xml_parse::parse_all_projects_list(&xml))
+    }
+
+    pub async fn lookup_account(
+        &self,
+        url: &str,
+        email: &str,
+        password: &str,
+    ) -> Result<(), String> {
+        let req = format!(
+            "<lookup_account>\n\
+             <url>{url}</url>\n\
+             <email_addr>{email}</email_addr>\n\
+             <passwd_hash>{password}</passwd_hash>\n\
+             </lookup_account>"
+        );
+        self.rpc_call(&req).await?;
+        Ok(())
+    }
+
+    pub async fn lookup_account_poll(&self) -> Result<AccountOut, String> {
+        let xml = self.rpc_call("<lookup_account_poll/>").await?;
+        Ok(xml_parse::parse_account_out(&xml))
+    }
+
+    pub async fn project_attach(
+        &self,
+        url: &str,
+        authenticator: &str,
+        name: &str,
+    ) -> Result<(), String> {
+        let req = format!(
+            "<project_attach>\n\
+             <project_url>{url}</project_url>\n\
+             <authenticator>{authenticator}</authenticator>\n\
+             <project_name>{name}</project_name>\n\
+             </project_attach>"
+        );
+        self.rpc_call(&req).await?;
+        Ok(())
+    }
+
+    pub async fn project_attach_poll(&self) -> Result<ProjectAttachReply, String> {
+        let xml = self.rpc_call("<project_attach_poll/>").await?;
+        Ok(xml_parse::parse_project_attach_reply(&xml))
     }
 }

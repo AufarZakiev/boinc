@@ -42,7 +42,7 @@ describe("ConfirmDialog", () => {
         confirmLabel: "Yes, do it",
       },
     });
-    const btn = document.body.querySelector(".btn-confirm");
+    const btn = document.body.querySelector(".btn-danger-fill");
     expect(btn!.textContent).toContain("Yes, do it");
   });
 
@@ -54,7 +54,7 @@ describe("ConfirmDialog", () => {
         message: "Confirm?",
       },
     });
-    const btn = document.body.querySelector(".btn-confirm");
+    const btn = document.body.querySelector(".btn-danger-fill");
     expect(btn!.textContent).toContain("Confirm");
   });
 
@@ -67,7 +67,7 @@ describe("ConfirmDialog", () => {
       },
     });
 
-    const btn = document.body.querySelector(".btn-confirm") as HTMLElement;
+    const btn = document.body.querySelector(".btn-danger-fill") as HTMLElement;
     btn.click();
     await wrapper.vm.$nextTick();
 
@@ -83,8 +83,10 @@ describe("ConfirmDialog", () => {
       },
     });
 
-    const btn = document.body.querySelector(".btn-cancel") as HTMLElement;
-    btn.click();
+    const buttons = document.body.querySelectorAll(".btn");
+    // First .btn is Cancel (the one without .btn-danger-fill)
+    const cancelBtn = buttons[0] as HTMLElement;
+    cancelBtn.click();
     await wrapper.vm.$nextTick();
 
     expect(wrapper.emitted("cancel")).toBeTruthy();

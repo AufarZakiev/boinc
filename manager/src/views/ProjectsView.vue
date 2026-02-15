@@ -3,15 +3,30 @@ import { ref } from "vue";
 import { useProjectsStore } from "../stores/projects";
 import type { Project } from "../types/boinc";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
+import ProjectAttachWizard from "../components/ProjectAttachWizard.vue";
+import PageHeader from "../components/PageHeader.vue";
+import DataTable from "../components/DataTable.vue";
+import EmptyState from "../components/EmptyState.vue";
+import StatusBadge from "../components/StatusBadge.vue";
 
 const store = useProjectsStore();
 
 const selected = ref<Project | null>(null);
+const showAttachWizard = ref(false);
 const confirmAction = ref<{
   title: string;
   message: string;
   action: () => Promise<void>;
 } | null>(null);
+
+const columns = [
+  { key: "project", label: "Project" },
+  { key: "account", label: "Account" },
+  { key: "team", label: "Team" },
+  { key: "totalCredit", label: "Total Credit", align: "right" as const },
+  { key: "avgCredit", label: "Avg Credit", align: "right" as const },
+  { key: "status", label: "Status" },
+];
 
 function selectProject(project: Project) {
   selected.value =
@@ -30,6 +45,19 @@ function projectStatus(project: Project): string {
   if (project.suspended_via_gui) return "Suspended";
   if (project.dont_request_more_work) return "No new tasks";
   return "Active";
+}
+
+function statusVariant(status: string): "default" | "success" | "warning" | "danger" | "info" {
+  switch (status) {
+    case "Active":
+      return "success";
+    case "Suspended":
+      return "warning";
+    case "No new tasks":
+      return "info";
+    default:
+      return "default";
+  }
 }
 
 async function handleSuspendResume() {
@@ -91,9 +119,9 @@ async function doConfirm() {
 
 <template>
   <div class="projects-view">
-    <div class="toolbar">
-      <h2>Projects</h2>
-      <div v-if="selected" class="actions">
+    <PageHeader title="Projects">
+      <button class="btn btn-primary" @click="showAttachWizard = true">Add Project</button>
+      <template v-if="selected">
         <button class="btn" @click="handleUpdate">Update</button>
         <button class="btn" @click="handleSuspendResume">
           {{ selected.suspended_via_gui ? "Resume" : "Suspend" }}
@@ -103,44 +131,42 @@ async function doConfirm() {
         </button>
         <button class="btn btn-danger" @click="handleReset">Reset</button>
         <button class="btn btn-danger" @click="handleDetach">Detach</button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <p v-if="store.error" class="error">{{ store.error }}</p>
-    <p v-else-if="store.loading && store.projects.length === 0" class="loading">
-      Loading projects...
-    </p>
-    <p v-else-if="store.projects.length === 0" class="empty">
-      No projects attached.
-    </p>
 
-    <table v-if="store.projects.length > 0" class="data-table">
-      <thead>
-        <tr>
-          <th>Project</th>
-          <th>Account</th>
-          <th>Team</th>
-          <th>Total Credit</th>
-          <th>Avg Credit</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="project in store.projects"
-          :key="project.master_url"
-          :class="{ 'row-selected': isSelected(project) }"
-          @click="selectProject(project)"
-        >
-          <td class="col-name">{{ project.project_name }}</td>
-          <td>{{ project.user_name }}</td>
-          <td>{{ project.team_name || "---" }}</td>
-          <td class="col-number">{{ formatCredit(project.user_total_credit) }}</td>
-          <td class="col-number">{{ formatCredit(project.user_expavg_credit) }}</td>
-          <td class="col-status">{{ projectStatus(project) }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <EmptyState
+      v-else-if="store.loading && store.projects.length === 0"
+      icon="&#8987;"
+      message="Loading projects..."
+    />
+
+    <EmptyState
+      v-else-if="store.projects.length === 0"
+      icon="&#128194;"
+      message="No projects attached."
+    />
+
+    <DataTable v-if="store.projects.length > 0" :columns="columns">
+      <tr
+        v-for="project in store.projects"
+        :key="project.master_url"
+        :class="{ 'row-selected': isSelected(project) }"
+        @click="selectProject(project)"
+      >
+        <td class="col-name">{{ project.project_name }}</td>
+        <td>{{ project.user_name }}</td>
+        <td>{{ project.team_name || "---" }}</td>
+        <td class="col-number">{{ formatCredit(project.user_total_credit) }}</td>
+        <td class="col-number">{{ formatCredit(project.user_expavg_credit) }}</td>
+        <td>
+          <StatusBadge :variant="statusVariant(projectStatus(project))">
+            {{ projectStatus(project) }}
+          </StatusBadge>
+        </td>
+      </tr>
+    </DataTable>
 
     <ConfirmDialog
       :open="confirmAction !== null"
@@ -149,92 +175,22 @@ async function doConfirm() {
       @confirm="doConfirm"
       @cancel="confirmAction = null"
     />
+
+    <ProjectAttachWizard
+      :open="showAttachWizard"
+      @close="showAttachWizard = false"
+    />
   </div>
 </template>
 
 <style scoped>
 .projects-view {
-  padding: 16px;
-}
-
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.actions {
-  display: flex;
-  gap: 6px;
-}
-
-.btn {
-  padding: 5px 12px;
-  border: 1px solid #cbd5e0;
-  border-radius: 4px;
-  background: #fff;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.btn:hover {
-  background: #f7fafc;
-}
-
-.btn-danger {
-  color: #e53e3e;
-  border-color: #feb2b2;
-}
-
-.btn-danger:hover {
-  background: #fff5f5;
+  padding: var(--space-lg);
 }
 
 .error {
-  color: #e53e3e;
-}
-.loading,
-.empty {
-  color: #718096;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.data-table th {
-  text-align: left;
-  padding: 8px;
-  border-bottom: 2px solid #e2e8f0;
-  font-weight: 600;
-  color: #4a5568;
-  white-space: nowrap;
-}
-
-.data-table td {
-  padding: 6px 8px;
-  border-bottom: 1px solid #edf2f7;
-}
-
-.data-table tbody tr {
-  cursor: pointer;
-}
-
-.data-table tbody tr:hover {
-  background: #f7fafc;
-}
-
-.row-selected {
-  background: #ebf8ff !important;
+  color: var(--color-danger);
+  font-size: var(--font-size-md);
 }
 
 .col-name {
@@ -244,9 +200,5 @@ h2 {
 .col-number {
   font-family: monospace;
   text-align: right;
-}
-
-.col-status {
-  white-space: nowrap;
 }
 </style>
