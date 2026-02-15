@@ -60,10 +60,10 @@ describe("StatusBar", () => {
     expect(wrapper.text()).not.toContain("suspended");
   });
 
-  it("shows BOINC Manager text", () => {
+  it("shows Fresco text", () => {
     const conn = useConnectionStore();
     conn.state = "Connected";
     const wrapper = mount(StatusBar);
-    expect(wrapper.text()).toContain("BOINC Manager");
+    expect(wrapper.text()).toContain("Fresco");
   });
 });

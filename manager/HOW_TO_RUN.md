@@ -1,4 +1,4 @@
-# How to Run the New BOINC Manager UI
+# How to Run Fresco
 
 ## Prerequisites
 

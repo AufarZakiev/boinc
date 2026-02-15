@@ -52,7 +52,7 @@ async function openWebsite() {
             </text>
           </svg>
         </div>
-        <h3>BOINC Manager</h3>
+        <h3>Fresco</h3>
         <p class="version">Version {{ version }}</p>
         <p class="description">
           Berkeley Open Infrastructure for Network Computing.

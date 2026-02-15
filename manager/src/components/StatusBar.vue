@@ -55,7 +55,7 @@ const gpuSuspendText = computed(() =>
     </div>
 
     <div class="status-section">
-      <span>BOINC Manager</span>
+      <span>Fresco</span>
     </div>
   </div>
 </template>

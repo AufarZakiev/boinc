@@ -1,8 +1,8 @@
 [package]
-name = "boinc-manager"
+name = "fresco"
 version = "0.1.0"
-description = "BOINC Manager — Tauri v2 UI"
-authors = ["BOINC Contributors"]
+description = "Fresco — A modern BOINC manager"
+authors = ["aufarz"]
 edition = "2021"
 
 [lib]

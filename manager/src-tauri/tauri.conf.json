@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "BOINC Manager",
+  "productName": "Fresco",
   "version": "0.1.0",
-  "identifier": "edu.berkeley.boinc.manager",
+  "identifier": "com.github.aufarzakiev.fresco",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "BOINC",
+        "title": "Fresco",
         "width": 1024,
         "height": 700
       }
