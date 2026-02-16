@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useConnectionStore } from "./stores/connection";
 import ActivityControls from "./components/ActivityControls.vue";
 import PreferencesDialog from "./components/PreferencesDialog.vue";
@@ -15,17 +15,35 @@ import ToastContainer from "./components/ToastContainer.vue";
 import { useManagerSettingsStore } from "./stores/managerSettings";
 import { useWindowState } from "./composables/useWindowState";
 import { notifyConnectionLost } from "./composables/useNotifications";
+import { useTasksStore } from "./stores/tasks";
+import { useProjectsStore } from "./stores/projects";
+import { useTransfersStore } from "./stores/transfers";
+import { useClientStore } from "./stores/client";
+import { useStatisticsStore } from "./stores/statistics";
+import { useMessagesStore } from "./stores/messages";
+import { useNoticesStore } from "./stores/notices";
+import { useDiskUsageStore } from "./stores/diskUsage";
 import {
   setRunMode,
   setGpuMode,
   shutdownClient,
   disconnect,
   getHostInfo,
+  startBoincClient,
 } from "./composables/useRpc";
 
 const connection = useConnectionStore();
 const managerSettings = useManagerSettingsStore();
 const route = useRoute();
+const router = useRouter();
+const tasksStore = useTasksStore();
+const projectsStore = useProjectsStore();
+const transfersStore = useTransfersStore();
+const clientStore = useClientStore();
+const statisticsStore = useStatisticsStore();
+const messagesStore = useMessagesStore();
+const noticesStore = useNoticesStore();
+const diskUsageStore = useDiskUsageStore();
 const showPreferences = ref(false);
 const showAbout = ref(false);
 const showAcctMgr = ref(false);
@@ -36,11 +54,55 @@ const showExitConfirm = ref(false);
 
 useWindowState();
 
+// ── Auto-connect to local BOINC client on startup ───────────────
+
+function defaultDataDir(): string {
+  const platform = navigator.platform.toLowerCase();
+  if (platform.includes("win")) return "C:\\ProgramData\\BOINC";
+  if (platform.includes("mac")) return "/Library/Application Support/BOINC Data";
+  return "/var/lib/boinc-client";
+}
+
+function startAllPolling() {
+  tasksStore.startPolling();
+  projectsStore.startPolling();
+  transfersStore.startPolling();
+  clientStore.startPolling();
+  statisticsStore.startPolling();
+  messagesStore.startPolling();
+  noticesStore.startPolling();
+  diskUsageStore.startPolling();
+}
+
+async function autoConnect() {
+  const dataDir = defaultDataDir();
+  await connection.connectToLocal(dataDir);
+
+  // If connection failed with a non-auth error, try auto-starting BOINC
+  if (connection.state !== "Connected" && connection.state !== "AuthError") {
+    try {
+      await startBoincClient(dataDir);
+      await connection.connectToLocal(dataDir);
+    } catch {
+      // BOINC not installed or failed to start — fall back to ConnectView
+    }
+  }
+
+  if (connection.state === "Connected") {
+    startAllPolling();
+  } else {
+    // Auto-connect failed — show ConnectView
+    router.replace("/");
+  }
+}
+
 // ── Tauri event listeners for system tray ───────────────────────
 type UnlistenFn = () => void;
 const unlisteners: UnlistenFn[] = [];
 
 onMounted(async () => {
+  autoConnect();
+
   try {
     const { listen } = await import("@tauri-apps/api/event");
 
@@ -61,30 +123,11 @@ onMounted(async () => {
           case "about":
             showAbout.value = true;
             break;
-          case "exit":
-            handleExit();
-            break;
         }
       }),
     );
 
-    // Window close button → minimize to tray or show exit confirmation
-    const { getCurrentWebviewWindow } = await import(
-      "@tauri-apps/api/webviewWindow"
-    );
-    unlisteners.push(
-      await getCurrentWebviewWindow().onCloseRequested(async (event) => {
-        const s = managerSettings.settings;
-        if (s.minimizeToTrayOnClose) {
-          event.preventDefault();
-          await getCurrentWebviewWindow().hide();
-        } else if (s.showExitConfirmation) {
-          event.preventDefault();
-          showExitConfirm.value = true;
-        }
-        // Otherwise, let the window close normally
-      }),
-    );
+    // Window close is handled in Rust (on_window_event in lib.rs)
   } catch {
     // Not in Tauri environment (e.g. tests, browser dev)
   }
@@ -93,14 +136,6 @@ onMounted(async () => {
 onUnmounted(() => {
   unlisteners.forEach((fn) => fn());
 });
-
-function handleExit() {
-  if (managerSettings.settings.showExitConfirmation) {
-    showExitConfirm.value = true;
-  } else {
-    doExit(false);
-  }
-}
 
 async function doExit(doShutdownClient: boolean) {
   showExitConfirm.value = false;

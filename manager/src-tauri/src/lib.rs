@@ -830,7 +830,17 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
-                let _ = window.hide();
+                let handle = window.app_handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    // Try to shut down BOINC client
+                    let state: State<AppState> = handle.state();
+                    let guard = state.client.lock().await;
+                    if let Some(client) = guard.as_ref() {
+                        let _ = client.quit().await;
+                    }
+                    drop(guard);
+                    handle.exit(0);
+                });
             }
         })
         .invoke_handler(tauri::generate_handler![

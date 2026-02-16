@@ -14,7 +14,6 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let resume = MenuItemBuilder::with_id("tray_resume", "Resume").build(app)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
     let about = MenuItemBuilder::with_id("tray_about", "About BOINC").build(app)?;
-    let exit = MenuItemBuilder::with_id("tray_exit", "Exit").build(app)?;
 
     let menu = MenuBuilder::new(app)
         .item(&open)
@@ -24,7 +23,6 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .item(&resume)
         .item(&sep2)
         .item(&about)
-        .item(&exit)
         .build()?;
 
     TrayIconBuilder::new()
@@ -52,9 +50,6 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                 }
                 "tray_about" => {
                     let _ = app.emit("tray-action", "about");
-                }
-                "tray_exit" => {
-                    let _ = app.emit("tray-action", "exit");
                 }
                 _ => {}
             }
