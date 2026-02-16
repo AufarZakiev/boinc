@@ -676,6 +676,46 @@ async fn get_daily_xfer_history(
     client.get_daily_xfer_history().await
 }
 
+// ── BOINC client launcher ────────────────────────────────────────
+
+#[tauri::command]
+async fn start_boinc_client(data_dir: String) -> Result<(), String> {
+    let exe_path = if cfg!(target_os = "windows") {
+        r"C:\Program Files\BOINC\boinc.exe".to_string()
+    } else if cfg!(target_os = "macos") {
+        "/Library/Application Support/BOINC Data/boinc_client".to_string()
+    } else {
+        "/usr/bin/boinc".to_string()
+    };
+
+    if !std::path::Path::new(&exe_path).exists() {
+        return Err(format!("BOINC client not found at {exe_path}"));
+    }
+
+    std::process::Command::new(&exe_path)
+        .arg("--dir")
+        .arg(&data_dir)
+        .arg("--redirectio")
+        .arg("--daemon")
+        .spawn()
+        .map_err(|e| format!("Failed to start BOINC client: {e}"))?;
+
+    // Poll port 31416 until it responds or timeout after 15s
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(15);
+    loop {
+        if tokio::net::TcpStream::connect("127.0.0.1:31416")
+            .await
+            .is_ok()
+        {
+            return Ok(());
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err("BOINC client started but not responding on port 31416 after 15s".to_string());
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+}
+
 // ── Graphics launcher ───────────────────────────────────────────
 
 #[tauri::command]
@@ -787,6 +827,12 @@ pub fn run() {
 
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             connect,
             connect_local,
@@ -839,6 +885,7 @@ pub fn run() {
             get_cc_config,
             set_cc_config,
             get_newer_version,
+            start_boinc_client,
             launch_graphics,
             launch_remote_desktop,
             exchange_versions,

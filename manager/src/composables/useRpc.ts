@@ -163,6 +163,12 @@ export async function abortTransfer(
   return invoke("abort_transfer", { projectUrl, filename });
 }
 
+// ── BOINC client launcher ────────────────────────────────────────
+
+export async function startBoincClient(dataDir: string): Promise<void> {
+  return invoke("start_boinc_client", { dataDir });
+}
+
 // ── Other ────────────────────────────────────────────────────────
 
 export async function runBenchmarks(): Promise<void> {

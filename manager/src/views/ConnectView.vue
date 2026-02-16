@@ -10,6 +10,7 @@ import { useMessagesStore } from "../stores/messages";
 import { useNoticesStore } from "../stores/notices";
 import { useDiskUsageStore } from "../stores/diskUsage";
 import { useRouter } from "vue-router";
+import { startBoincClient } from "../composables/useRpc";
 
 const connection = useConnectionStore();
 const tasks = useTasksStore();
@@ -43,6 +44,7 @@ const host = ref("localhost");
 const port = ref(31416);
 const password = ref("");
 const connecting = ref(false);
+const statusMessage = ref<string | null>(null);
 const recentConnections = ref<RecentConnection[]>([]);
 
 onMounted(() => {
@@ -116,9 +118,24 @@ function startAllPolling() {
 
 async function handleConnect() {
   connecting.value = true;
+  statusMessage.value = null;
 
   if (mode.value === "local") {
     await connection.connectToLocal(dataDir.value);
+
+    // If local connection failed with a non-auth error, try auto-starting BOINC
+    if (connection.state !== "Connected" && connection.state !== "AuthError") {
+      statusMessage.value = "Starting BOINC client...";
+      try {
+        await startBoincClient(dataDir.value);
+        statusMessage.value = "BOINC client started, connecting...";
+        await connection.connectToLocal(dataDir.value);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        connection.error = msg;
+      }
+      statusMessage.value = null;
+    }
   } else {
     await connection.connectToRemote(host.value, port.value, password.value);
   }
@@ -229,10 +246,10 @@ function formatTimestamp(ts: number): string {
           :disabled="connecting"
           @click="handleConnect"
         >
-          {{ connecting ? "Connecting..." : "Connect" }}
+          {{ statusMessage ?? (connecting ? "Connecting..." : "Connect") }}
         </button>
 
-        <p v-if="connection.error" class="error">{{ connection.error }}</p>
+        <p v-if="connection.error && !statusMessage" class="error">{{ connection.error }}</p>
       </div>
 
       <!-- Recent connections -->
