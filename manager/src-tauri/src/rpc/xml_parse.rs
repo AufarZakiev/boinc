@@ -2,10 +2,11 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 
 use super::types::{
-    AccountOut, AcctMgrInfo, AcctMgrRpcReply, CcConfig, CcStatus, DailyStats, DayOfWeekPrefs,
-    DiskUsage, DiskUsageProject, FileTransfer, GlobalPreferences, GuiUrl, HostInfo, LogFlags,
-    Message, NewerVersionInfo, Notice, Project, ProjectAttachReply, ProjectConfig, ProjectListEntry,
-    ProjectStatistics, ProxyInfo, TaskResult,
+    AccountOut, AcctMgrInfo, AcctMgrRpcReply, CcConfig, CcState, CcStatus, DailyStats,
+    DailyXfer, DailyXferHistory, DayOfWeekPrefs, DiskUsage, DiskUsageProject, FileTransfer,
+    GlobalPreferences, GuiUrl, HostInfo, LogFlags, Message, NewerVersionInfo, Notice, OldResult,
+    Project, ProjectAttachReply, ProjectConfig, ProjectInitStatus, ProjectListEntry,
+    ProjectStatistics, ProxyInfo, TaskResult, VersionInfo,
 };
 
 /// Extract text content of an XML element, advancing the reader past its end tag.
@@ -411,9 +412,23 @@ pub fn parse_cc_status(xml: &str) -> CcStatus {
                                 status.network_suspend_reason =
                                     text.parse().unwrap_or(0);
                             }
+                            "max_event_log_lines" => {
+                                status.max_event_log_lines =
+                                    text.parse().unwrap_or(0);
+                            }
                             _ => {}
                         }
                     }
+                    _ => {}
+                }
+            }
+            Ok(Event::Empty(ref e)) if in_status => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match tag.as_str() {
+                    "ams_password_error" => status.ams_password_error = true,
+                    "manager_must_quit" => status.manager_must_quit = true,
+                    "disallow_attach" => status.disallow_attach = true,
+                    "simple_gui_only" => status.simple_gui_only = true,
                     _ => {}
                 }
             }
@@ -493,6 +508,11 @@ pub fn parse_file_transfers(xml: &str) -> Vec<FileTransfer> {
                                     current.xfer_speed =
                                         text.parse().unwrap_or(0.0);
                                 }
+                                "file_offset" => {
+                                    current.file_offset =
+                                        text.parse().unwrap_or(0.0);
+                                }
+                                "hostname" => current.hostname = text,
                                 _ => {}
                             }
                         } else {
@@ -510,6 +530,30 @@ pub fn parse_file_transfers(xml: &str) -> Vec<FileTransfer> {
                                 }
                                 "is_upload" => {
                                     current.is_upload = true;
+                                }
+                                "num_retries" => {
+                                    current.num_retries =
+                                        text.parse().unwrap_or(0);
+                                }
+                                "first_request_time" => {
+                                    current.first_request_time =
+                                        text.parse().unwrap_or(0.0);
+                                }
+                                "next_request_time" => {
+                                    current.next_request_time =
+                                        text.parse().unwrap_or(0.0);
+                                }
+                                "time_so_far" => {
+                                    current.time_so_far =
+                                        text.parse().unwrap_or(0.0);
+                                }
+                                "estimated_xfer_time_remaining" => {
+                                    current.estimated_xfer_time_remaining =
+                                        text.parse().unwrap_or(0.0);
+                                }
+                                "project_backoff" => {
+                                    current.project_backoff =
+                                        text.parse().unwrap_or(0.0);
                                 }
                                 _ => {}
                             }
@@ -909,6 +953,44 @@ pub fn parse_global_preferences(xml: &str) -> GlobalPreferences {
                                 prefs.work_buf_additional_days =
                                     text.parse().unwrap_or(0.0)
                             }
+                            "run_gpu_if_user_active" => {
+                                prefs.run_gpu_if_user_active =
+                                    text.parse::<i32>().unwrap_or(0) != 0
+                            }
+                            "daily_xfer_period_days" => {
+                                prefs.daily_xfer_period_days =
+                                    text.parse().unwrap_or(0)
+                            }
+                            "disk_interval" => {
+                                prefs.disk_interval = text.parse().unwrap_or(0.0)
+                            }
+                            "niu_suspend_cpu_usage" => {
+                                prefs.niu_suspend_cpu_usage =
+                                    text.parse().unwrap_or(0.0)
+                            }
+                            "niu_cpu_usage_limit" => {
+                                prefs.niu_cpu_usage_limit =
+                                    text.parse().unwrap_or(0.0)
+                            }
+                            "niu_max_ncpus_pct" => {
+                                prefs.niu_max_ncpus_pct =
+                                    text.parse().unwrap_or(0.0)
+                            }
+                            "max_ncpus" => {
+                                prefs.max_ncpus = text.parse().unwrap_or(0)
+                            }
+                            "battery_charge_min_pct" => {
+                                prefs.battery_charge_min_pct =
+                                    text.parse().unwrap_or(0.0)
+                            }
+                            "battery_max_temperature" => {
+                                prefs.battery_max_temperature =
+                                    text.parse().unwrap_or(0.0)
+                            }
+                            "vm_max_used_frac" => {
+                                prefs.vm_max_used_frac =
+                                    text.parse().unwrap_or(0.0)
+                            }
                             _ => {}
                         }
                     }
@@ -920,7 +1002,12 @@ pub fn parse_global_preferences(xml: &str) -> GlobalPreferences {
                 match tag.as_str() {
                     "run_on_batteries" => prefs.run_on_batteries = true,
                     "run_if_user_active" => prefs.run_if_user_active = true,
+                    "run_gpu_if_user_active" => prefs.run_gpu_if_user_active = true,
                     "leave_apps_in_memory" => prefs.leave_apps_in_memory = true,
+                    "dont_verify_images" => prefs.dont_verify_images = true,
+                    "confirm_before_connecting" => prefs.confirm_before_connecting = true,
+                    "hangup_if_dialed" => prefs.hangup_if_dialed = true,
+                    "network_wifi_only" => prefs.network_wifi_only = true,
                     _ => {}
                 }
             }
@@ -952,6 +1039,7 @@ pub fn serialize_global_preferences(prefs: &GlobalPreferences) -> String {
         "<global_preferences>\n\
          <run_on_batteries>{}</run_on_batteries>\n\
          <run_if_user_active>{}</run_if_user_active>\n\
+         <run_gpu_if_user_active>{}</run_gpu_if_user_active>\n\
          <idle_time_to_run>{}</idle_time_to_run>\n\
          <max_ncpus_pct>{}</max_ncpus_pct>\n\
          <cpu_usage_limit>{}</cpu_usage_limit>\n\
@@ -960,9 +1048,11 @@ pub fn serialize_global_preferences(prefs: &GlobalPreferences) -> String {
          <max_bytes_sec_down>{}</max_bytes_sec_down>\n\
          <max_bytes_sec_up>{}</max_bytes_sec_up>\n\
          <daily_xfer_limit_mb>{}</daily_xfer_limit_mb>\n\
+         <daily_xfer_period_days>{}</daily_xfer_period_days>\n\
          <disk_max_used_gb>{}</disk_max_used_gb>\n\
          <disk_max_used_pct>{}</disk_max_used_pct>\n\
          <disk_min_free_gb>{}</disk_min_free_gb>\n\
+         <disk_interval>{}</disk_interval>\n\
          <work_buf_min_days>{}</work_buf_min_days>\n\
          <cpu_scheduling_period_minutes>{}</cpu_scheduling_period_minutes>\n\
          <start_hour>{}</start_hour>\n\
@@ -971,10 +1061,18 @@ pub fn serialize_global_preferences(prefs: &GlobalPreferences) -> String {
          <net_end_hour>{}</net_end_hour>\n\
          <suspend_if_no_recent_input>{}</suspend_if_no_recent_input>\n\
          <suspend_cpu_usage>{}</suspend_cpu_usage>\n\
+         <niu_suspend_cpu_usage>{}</niu_suspend_cpu_usage>\n\
+         <niu_cpu_usage_limit>{}</niu_cpu_usage_limit>\n\
+         <niu_max_ncpus_pct>{}</niu_max_ncpus_pct>\n\
          <leave_apps_in_memory>{}</leave_apps_in_memory>\n\
-         <work_buf_additional_days>{}</work_buf_additional_days>\n",
+         <work_buf_additional_days>{}</work_buf_additional_days>\n\
+         <max_ncpus>{}</max_ncpus>\n\
+         <battery_charge_min_pct>{}</battery_charge_min_pct>\n\
+         <battery_max_temperature>{}</battery_max_temperature>\n\
+         <vm_max_used_frac>{}</vm_max_used_frac>\n",
         if prefs.run_on_batteries { 1 } else { 0 },
         if prefs.run_if_user_active { 1 } else { 0 },
+        if prefs.run_gpu_if_user_active { 1 } else { 0 },
         prefs.idle_time_to_run,
         prefs.max_ncpus_pct,
         prefs.cpu_usage_limit,
@@ -983,9 +1081,11 @@ pub fn serialize_global_preferences(prefs: &GlobalPreferences) -> String {
         prefs.max_bytes_sec_down,
         prefs.max_bytes_sec_up,
         prefs.daily_xfer_limit_mb,
+        prefs.daily_xfer_period_days,
         prefs.disk_max_used_gb,
         prefs.disk_max_used_pct,
         prefs.disk_min_free_gb,
+        prefs.disk_interval,
         prefs.work_buf_min_days,
         prefs.cpu_scheduling_period_minutes,
         prefs.start_hour,
@@ -994,9 +1094,28 @@ pub fn serialize_global_preferences(prefs: &GlobalPreferences) -> String {
         prefs.net_end_hour,
         prefs.suspend_if_no_recent_input,
         prefs.suspend_cpu_usage,
+        prefs.niu_suspend_cpu_usage,
+        prefs.niu_cpu_usage_limit,
+        prefs.niu_max_ncpus_pct,
         if prefs.leave_apps_in_memory { 1 } else { 0 },
         prefs.work_buf_additional_days,
+        prefs.max_ncpus,
+        prefs.battery_charge_min_pct,
+        prefs.battery_max_temperature,
+        prefs.vm_max_used_frac,
     );
+    if prefs.dont_verify_images {
+        xml.push_str("<dont_verify_images/>\n");
+    }
+    if prefs.confirm_before_connecting {
+        xml.push_str("<confirm_before_connecting/>\n");
+    }
+    if prefs.hangup_if_dialed {
+        xml.push_str("<hangup_if_dialed/>\n");
+    }
+    if prefs.network_wifi_only {
+        xml.push_str("<network_wifi_only/>\n");
+    }
     for dp in &prefs.day_prefs {
         xml.push_str(&format!(
             "<day_prefs>\n\
@@ -1047,10 +1166,23 @@ pub fn parse_host_info(xml: &str) -> HostInfo {
                             "os_version" => info.os_version = text,
                             "product_name" => info.product_name = text,
                             "virtualbox_version" => info.virtualbox_version = text,
+                            "timezone" => info.timezone = text.parse().unwrap_or(0),
+                            "host_cpid" => info.host_cpid = text,
+                            "p_features" => info.p_features = text,
+                            "p_membw" => info.p_membw = text.parse().unwrap_or(0.0),
+                            "p_calculated" => info.p_calculated = text.parse().unwrap_or(0.0),
+                            "mac_address" => info.mac_address = text,
+                            "docker_version" => info.docker_version = text,
                             _ => {}
                         }
                     }
                     _ => {}
+                }
+            }
+            Ok(Event::Empty(ref e)) if in_host_info => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                if tag == "p_vm_extensions_disabled" {
+                    info.p_vm_extensions_disabled = true;
                 }
             }
             Ok(Event::End(ref e)) => {
@@ -1495,19 +1627,7 @@ pub fn parse_cc_config(xml: &str) -> CcConfig {
                     _ if in_log_flags => {
                         let text = read_text(&mut reader);
                         let val = text.parse::<i32>().unwrap_or(0) != 0;
-                        match tag.as_str() {
-                            "task" => config.log_flags.task = val,
-                            "file_xfer" => config.log_flags.file_xfer = val,
-                            "sched_ops" => config.log_flags.sched_ops = val,
-                            "cpu_sched" => config.log_flags.cpu_sched = val,
-                            "network_xfer" => config.log_flags.network_xfer = val,
-                            "mem_usage" => config.log_flags.mem_usage = val,
-                            "disk_usage" => config.log_flags.disk_usage = val,
-                            "http_debug" => config.log_flags.http_debug = val,
-                            "state_debug" => config.log_flags.state_debug = val,
-                            "statefile_debug" => config.log_flags.statefile_debug = val,
-                            _ => {}
-                        }
+                        set_log_flag(&mut config.log_flags, &tag, val);
                     }
                     _ if in_config && !in_log_flags => {
                         let text = read_text(&mut reader);
@@ -1515,12 +1635,24 @@ pub fn parse_cc_config(xml: &str) -> CcConfig {
                             "max_file_xfers" => {
                                 config.max_file_xfers = text.parse().unwrap_or(0)
                             }
+                            "max_file_xfers_per_project" => {
+                                config.max_file_xfers_per_project = text.parse().unwrap_or(0)
+                            }
                             "max_ncpus" => {
                                 config.max_ncpus = text.parse().unwrap_or(0)
                             }
                             "report_results_immediately" => {
                                 config.report_results_immediately =
                                     text.parse::<i32>().unwrap_or(0) != 0
+                            }
+                            "http_transfer_timeout" => {
+                                config.http_transfer_timeout = text.parse().unwrap_or(0)
+                            }
+                            "max_stderr_file_size" => {
+                                config.max_stderr_file_size = text.parse().unwrap_or(0)
+                            }
+                            "max_stdout_file_size" => {
+                                config.max_stdout_file_size = text.parse().unwrap_or(0)
                             }
                             _ => {}
                         }
@@ -1532,20 +1664,9 @@ pub fn parse_cc_config(xml: &str) -> CcConfig {
                 let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
                 match tag.as_str() {
                     "report_results_immediately" => config.report_results_immediately = true,
+                    "fetch_minimal_work" => config.fetch_minimal_work = true,
                     _ if in_log_flags => {
-                        match tag.as_str() {
-                            "task" => config.log_flags.task = true,
-                            "file_xfer" => config.log_flags.file_xfer = true,
-                            "sched_ops" => config.log_flags.sched_ops = true,
-                            "cpu_sched" => config.log_flags.cpu_sched = true,
-                            "network_xfer" => config.log_flags.network_xfer = true,
-                            "mem_usage" => config.log_flags.mem_usage = true,
-                            "disk_usage" => config.log_flags.disk_usage = true,
-                            "http_debug" => config.log_flags.http_debug = true,
-                            "state_debug" => config.log_flags.state_debug = true,
-                            "statefile_debug" => config.log_flags.statefile_debug = true,
-                            _ => {}
-                        }
+                        set_log_flag(&mut config.log_flags, &tag, true);
                     }
                     _ => {}
                 }
@@ -1570,7 +1691,74 @@ pub fn parse_cc_config(xml: &str) -> CcConfig {
     config
 }
 
-/// Serialize cc_config to XML (Phase 5).
+/// Helper to set a log flag by name.
+fn set_log_flag(flags: &mut LogFlags, name: &str, val: bool) {
+    match name {
+        "task" => flags.task = val,
+        "file_xfer" => flags.file_xfer = val,
+        "sched_ops" => flags.sched_ops = val,
+        "cpu_sched" => flags.cpu_sched = val,
+        "network_xfer" => flags.network_xfer = val,
+        "mem_usage" => flags.mem_usage = val,
+        "disk_usage" => flags.disk_usage = val,
+        "http_debug" => flags.http_debug = val,
+        "state_debug" => flags.state_debug = val,
+        "statefile_debug" => flags.statefile_debug = val,
+        "android_debug" => flags.android_debug = val,
+        "app_msg_receive" => flags.app_msg_receive = val,
+        "app_msg_send" => flags.app_msg_send = val,
+        "benchmark_debug" => flags.benchmark_debug = val,
+        "checkpoint_debug" => flags.checkpoint_debug = val,
+        "coproc_debug" => flags.coproc_debug = val,
+        "cpu_sched_debug" => flags.cpu_sched_debug = val,
+        "cpu_sched_status" => flags.cpu_sched_status = val,
+        "file_xfer_debug" => flags.file_xfer_debug = val,
+        "gui_rpc_debug" => flags.gui_rpc_debug = val,
+        "http_xfer_debug" => flags.http_xfer_debug = val,
+        "network_status_debug" => flags.network_status_debug = val,
+        "notice_debug" => flags.notice_debug = val,
+        "proxy_debug" => flags.proxy_debug = val,
+        "rr_simulation" => flags.rr_simulation = val,
+        "suspend_debug" => flags.suspend_debug = val,
+        "work_fetch_debug" => flags.work_fetch_debug = val,
+        _ => {}
+    }
+}
+
+/// Get all log flags as (name, value) pairs for serialization.
+fn log_flag_list(flags: &LogFlags) -> Vec<(&'static str, bool)> {
+    vec![
+        ("task", flags.task),
+        ("file_xfer", flags.file_xfer),
+        ("sched_ops", flags.sched_ops),
+        ("cpu_sched", flags.cpu_sched),
+        ("network_xfer", flags.network_xfer),
+        ("mem_usage", flags.mem_usage),
+        ("disk_usage", flags.disk_usage),
+        ("http_debug", flags.http_debug),
+        ("state_debug", flags.state_debug),
+        ("statefile_debug", flags.statefile_debug),
+        ("android_debug", flags.android_debug),
+        ("app_msg_receive", flags.app_msg_receive),
+        ("app_msg_send", flags.app_msg_send),
+        ("benchmark_debug", flags.benchmark_debug),
+        ("checkpoint_debug", flags.checkpoint_debug),
+        ("coproc_debug", flags.coproc_debug),
+        ("cpu_sched_debug", flags.cpu_sched_debug),
+        ("cpu_sched_status", flags.cpu_sched_status),
+        ("file_xfer_debug", flags.file_xfer_debug),
+        ("gui_rpc_debug", flags.gui_rpc_debug),
+        ("http_xfer_debug", flags.http_xfer_debug),
+        ("network_status_debug", flags.network_status_debug),
+        ("notice_debug", flags.notice_debug),
+        ("proxy_debug", flags.proxy_debug),
+        ("rr_simulation", flags.rr_simulation),
+        ("suspend_debug", flags.suspend_debug),
+        ("work_fetch_debug", flags.work_fetch_debug),
+    ]
+}
+
+/// Serialize cc_config to XML.
 pub fn serialize_cc_config(config: &CcConfig) -> String {
     let mut xml = String::from("<cc_config>\n<options>\n");
     for app in &config.exclusive_apps {
@@ -1585,27 +1773,41 @@ pub fn serialize_cc_config(config: &CcConfig) -> String {
             config.max_file_xfers
         ));
     }
+    if config.max_file_xfers_per_project > 0 {
+        xml.push_str(&format!(
+            "<max_file_xfers_per_project>{}</max_file_xfers_per_project>\n",
+            config.max_file_xfers_per_project
+        ));
+    }
     if config.max_ncpus > 0 {
         xml.push_str(&format!("<max_ncpus>{}</max_ncpus>\n", config.max_ncpus));
     }
     if config.report_results_immediately {
         xml.push_str("<report_results_immediately/>\n");
     }
+    if config.fetch_minimal_work {
+        xml.push_str("<fetch_minimal_work/>\n");
+    }
+    if config.http_transfer_timeout > 0 {
+        xml.push_str(&format!(
+            "<http_transfer_timeout>{}</http_transfer_timeout>\n",
+            config.http_transfer_timeout
+        ));
+    }
+    if config.max_stderr_file_size > 0 {
+        xml.push_str(&format!(
+            "<max_stderr_file_size>{}</max_stderr_file_size>\n",
+            config.max_stderr_file_size
+        ));
+    }
+    if config.max_stdout_file_size > 0 {
+        xml.push_str(&format!(
+            "<max_stdout_file_size>{}</max_stdout_file_size>\n",
+            config.max_stdout_file_size
+        ));
+    }
     xml.push_str("</options>\n<log_flags>\n");
-    let flags = &config.log_flags;
-    let flag_list = [
-        ("task", flags.task),
-        ("file_xfer", flags.file_xfer),
-        ("sched_ops", flags.sched_ops),
-        ("cpu_sched", flags.cpu_sched),
-        ("network_xfer", flags.network_xfer),
-        ("mem_usage", flags.mem_usage),
-        ("disk_usage", flags.disk_usage),
-        ("http_debug", flags.http_debug),
-        ("state_debug", flags.state_debug),
-        ("statefile_debug", flags.statefile_debug),
-    ];
-    for (name, val) in flag_list {
+    for (name, val) in log_flag_list(&config.log_flags) {
         xml.push_str(&format!(
             "<{name}>{}</{name}>\n",
             if val { 1 } else { 0 }
@@ -1615,7 +1817,276 @@ pub fn serialize_cc_config(config: &CcConfig) -> String {
     xml
 }
 
-/// Parse `<newer_version>` from `get_newer_version` response (Phase 6).
+/// Parse `<exchange_versions>` response to get version info.
+pub fn parse_version_info(xml: &str) -> VersionInfo {
+    let mut reader = Reader::from_str(xml);
+    let mut buf = Vec::new();
+    let mut info = VersionInfo::default();
+    let mut in_version = false;
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match tag.as_str() {
+                    "server_version" => in_version = true,
+                    _ if in_version => {
+                        let text = read_text(&mut reader);
+                        match tag.as_str() {
+                            "major" => info.major = text.parse().unwrap_or(0),
+                            "minor" => info.minor = text.parse().unwrap_or(0),
+                            "release" => info.release = text.parse().unwrap_or(0),
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                if tag == "server_version" {
+                    in_version = false;
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    info
+}
+
+/// Parse `<client_state>` from a `get_state` response.
+pub fn parse_cc_state(xml: &str) -> CcState {
+    let mut state = CcState::default();
+    state.results = parse_results(xml);
+    state.projects = parse_projects(xml);
+    state.host_info = parse_host_info(xml);
+
+    let mut reader = Reader::from_str(xml);
+    let mut buf = Vec::new();
+    let mut in_client_state = false;
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match tag.as_str() {
+                    "client_state" => in_client_state = true,
+                    "core_client_major_version" if in_client_state => {
+                        let text = read_text(&mut reader);
+                        state.version_info.major = text.parse().unwrap_or(0);
+                    }
+                    "core_client_minor_version" if in_client_state => {
+                        let text = read_text(&mut reader);
+                        state.version_info.minor = text.parse().unwrap_or(0);
+                    }
+                    "core_client_release" if in_client_state => {
+                        let text = read_text(&mut reader);
+                        state.version_info.release = text.parse().unwrap_or(0);
+                    }
+                    "platform_name" if in_client_state => {
+                        let text = read_text(&mut reader);
+                        state.platforms.push(text);
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::Empty(ref e)) if in_client_state => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                if tag == "executing_as_daemon" {
+                    state.executing_as_daemon = true;
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                if tag == "client_state" {
+                    in_client_state = false;
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    state
+}
+
+/// Parse `<project_init_status>` response.
+pub fn parse_project_init_status(xml: &str) -> ProjectInitStatus {
+    let mut reader = Reader::from_str(xml);
+    let mut buf = Vec::new();
+    let mut status = ProjectInitStatus::default();
+    let mut in_status = false;
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match tag.as_str() {
+                    "get_project_init_status" | "project_init_status" => in_status = true,
+                    _ if in_status => {
+                        let text = read_text(&mut reader);
+                        match tag.as_str() {
+                            "url" => status.url = text,
+                            "name" => status.name = text,
+                            "team_name" => status.team_name = text,
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::Empty(ref e)) if in_status => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match tag.as_str() {
+                    "has_account_key" => status.has_account_key = true,
+                    "embedded" => status.embedded = true,
+                    _ => {}
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                if tag == "get_project_init_status" || tag == "project_init_status" {
+                    in_status = false;
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    status
+}
+
+/// Parse daily transfer history response.
+pub fn parse_daily_xfer_history(xml: &str) -> DailyXferHistory {
+    let mut reader = Reader::from_str(xml);
+    let mut buf = Vec::new();
+    let mut history = DailyXferHistory::default();
+    let mut in_dx = false;
+    let mut current = DailyXfer::default();
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match tag.as_str() {
+                    "dx" => {
+                        in_dx = true;
+                        current = DailyXfer::default();
+                    }
+                    _ if in_dx => {
+                        let text = read_text(&mut reader);
+                        match tag.as_str() {
+                            "when" => current.when = text.parse().unwrap_or(0),
+                            "up" => current.up = text.parse().unwrap_or(0.0),
+                            "down" => current.down = text.parse().unwrap_or(0.0),
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                if tag == "dx" {
+                    in_dx = false;
+                    history.daily_xfers.push(current.clone());
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    history
+}
+
+/// Parse old results response.
+pub fn parse_old_results(xml: &str) -> Vec<OldResult> {
+    let mut reader = Reader::from_str(xml);
+    let mut buf = Vec::new();
+    let mut results = Vec::new();
+    let mut in_old_result = false;
+    let mut current = OldResult::default();
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match tag.as_str() {
+                    "old_result" => {
+                        in_old_result = true;
+                        current = OldResult::default();
+                    }
+                    _ if in_old_result => {
+                        let text = read_text(&mut reader);
+                        match tag.as_str() {
+                            "project_url" => current.project_url = text,
+                            "result_name" => current.result_name = text,
+                            "app_name" => current.app_name = text,
+                            "exit_status" => current.exit_status = text.parse().unwrap_or(0),
+                            "elapsed_time" => {
+                                current.elapsed_time = text.parse().unwrap_or(0.0)
+                            }
+                            "cpu_time" => current.cpu_time = text.parse().unwrap_or(0.0),
+                            "completed_time" => {
+                                current.completed_time = text.parse().unwrap_or(0.0)
+                            }
+                            "create_time" => {
+                                current.create_time = text.parse().unwrap_or(0.0)
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                if tag == "old_result" {
+                    in_old_result = false;
+                    results.push(current.clone());
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    results
+}
+
+/// Parse message count from `get_message_count` response.
+pub fn parse_message_count(xml: &str) -> i32 {
+    let mut reader = Reader::from_str(xml);
+    let mut buf = Vec::new();
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                if tag == "seqno" {
+                    let text = read_text(&mut reader);
+                    return text.parse().unwrap_or(0);
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    0
+}
+
+/// Parse `<newer_version>` from `get_newer_version` response.
 pub fn parse_newer_version(xml: &str) -> NewerVersionInfo {
     let mut reader = Reader::from_str(xml);
     let mut buf = Vec::new();

@@ -6,6 +6,7 @@ import {
   retryTransfer as rpcRetryTransfer,
   abortTransfer as rpcAbortTransfer,
 } from "../composables/useRpc";
+import { useConnectionStore } from "./connection";
 
 export const useTransfersStore = defineStore("transfers", () => {
   const transfers = ref<FileTransfer[]>([]);
@@ -21,6 +22,8 @@ export const useTransfersStore = defineStore("transfers", () => {
       transfers.value = await getTransfers();
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e);
+      const connection = useConnectionStore();
+      connection.handleConnectionError();
     } finally {
       loading.value = false;
     }

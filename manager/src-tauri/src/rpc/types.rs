@@ -87,10 +87,14 @@ pub struct CcStatus {
     pub network_mode_perm: i32,
     pub network_mode_delay: f64,
     pub network_status: i32,
-    // Suspend reasons (Phase 3)
     pub task_suspend_reason: i32,
     pub gpu_suspend_reason: i32,
     pub network_suspend_reason: i32,
+    pub ams_password_error: bool,
+    pub manager_must_quit: bool,
+    pub disallow_attach: bool,
+    pub simple_gui_only: bool,
+    pub max_event_log_lines: i32,
 }
 
 /// Matches BOINC's FILE_TRANSFER struct.
@@ -104,6 +108,14 @@ pub struct FileTransfer {
     pub bytes_xferred: f64,
     pub xfer_speed: f64,
     pub is_upload: bool,
+    pub num_retries: i32,
+    pub first_request_time: f64,
+    pub next_request_time: f64,
+    pub time_so_far: f64,
+    pub estimated_xfer_time_remaining: f64,
+    pub file_offset: f64,
+    pub hostname: String,
+    pub project_backoff: f64,
 }
 
 /// State of the RPC connection.
@@ -188,6 +200,7 @@ pub struct DayOfWeekPrefs {
 pub struct GlobalPreferences {
     pub run_on_batteries: bool,
     pub run_if_user_active: bool,
+    pub run_gpu_if_user_active: bool,
     pub idle_time_to_run: f64,
     pub max_ncpus_pct: f64,
     pub cpu_usage_limit: f64,
@@ -196,20 +209,32 @@ pub struct GlobalPreferences {
     pub max_bytes_sec_down: f64,
     pub max_bytes_sec_up: f64,
     pub daily_xfer_limit_mb: f64,
+    pub daily_xfer_period_days: i32,
     pub disk_max_used_gb: f64,
     pub disk_max_used_pct: f64,
     pub disk_min_free_gb: f64,
+    pub disk_interval: f64,
     pub work_buf_min_days: f64,
     pub cpu_scheduling_period_minutes: f64,
     pub start_hour: f64,
     pub end_hour: f64,
     pub net_start_hour: f64,
     pub net_end_hour: f64,
-    // Enhanced preferences (Phase 5)
     pub suspend_if_no_recent_input: f64,
     pub suspend_cpu_usage: f64,
+    pub niu_suspend_cpu_usage: f64,
+    pub niu_cpu_usage_limit: f64,
+    pub niu_max_ncpus_pct: f64,
     pub leave_apps_in_memory: bool,
+    pub dont_verify_images: bool,
+    pub confirm_before_connecting: bool,
+    pub hangup_if_dialed: bool,
+    pub network_wifi_only: bool,
     pub work_buf_additional_days: f64,
+    pub max_ncpus: i32,
+    pub battery_charge_min_pct: f64,
+    pub battery_max_temperature: f64,
+    pub vm_max_used_frac: f64,
     pub day_prefs: Vec<DayOfWeekPrefs>,
 }
 
@@ -232,6 +257,14 @@ pub struct HostInfo {
     pub os_version: String,
     pub product_name: String,
     pub virtualbox_version: String,
+    pub timezone: i32,
+    pub host_cpid: String,
+    pub p_features: String,
+    pub p_membw: f64,
+    pub p_calculated: f64,
+    pub p_vm_extensions_disabled: bool,
+    pub mac_address: String,
+    pub docker_version: String,
 }
 
 /// Entry in the all-projects list.
@@ -312,18 +345,23 @@ pub struct ProxyInfo {
     pub noproxy_hosts: String,
 }
 
-/// CC Config (subset the GUI exposes) (Phase 5).
+/// CC Config.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CcConfig {
     pub exclusive_apps: Vec<String>,
     pub exclusive_gpu_apps: Vec<String>,
     pub log_flags: LogFlags,
     pub max_file_xfers: i32,
+    pub max_file_xfers_per_project: i32,
     pub max_ncpus: i32,
     pub report_results_immediately: bool,
+    pub fetch_minimal_work: bool,
+    pub http_transfer_timeout: i32,
+    pub max_stderr_file_size: i32,
+    pub max_stdout_file_size: i32,
 }
 
-/// Log flags subset (Phase 5).
+/// Log flags.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LogFlags {
     pub task: bool,
@@ -336,11 +374,84 @@ pub struct LogFlags {
     pub http_debug: bool,
     pub state_debug: bool,
     pub statefile_debug: bool,
+    pub android_debug: bool,
+    pub app_msg_receive: bool,
+    pub app_msg_send: bool,
+    pub benchmark_debug: bool,
+    pub checkpoint_debug: bool,
+    pub coproc_debug: bool,
+    pub cpu_sched_debug: bool,
+    pub cpu_sched_status: bool,
+    pub file_xfer_debug: bool,
+    pub gui_rpc_debug: bool,
+    pub http_xfer_debug: bool,
+    pub network_status_debug: bool,
+    pub notice_debug: bool,
+    pub proxy_debug: bool,
+    pub rr_simulation: bool,
+    pub suspend_debug: bool,
+    pub work_fetch_debug: bool,
 }
 
-/// Newer version check result (Phase 6).
+/// Newer version check result.
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct NewerVersionInfo {
     pub newer_version: String,
     pub download_url: String,
+}
+
+/// Version information from exchange_versions.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct VersionInfo {
+    pub major: i32,
+    pub minor: i32,
+    pub release: i32,
+}
+
+/// Full client state from get_state.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct CcState {
+    pub projects: Vec<Project>,
+    pub results: Vec<TaskResult>,
+    pub platforms: Vec<String>,
+    pub version_info: VersionInfo,
+    pub executing_as_daemon: bool,
+    pub host_info: HostInfo,
+}
+
+/// Project init status (for auto-attach).
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct ProjectInitStatus {
+    pub url: String,
+    pub name: String,
+    pub team_name: String,
+    pub has_account_key: bool,
+    pub embedded: bool,
+}
+
+/// A single daily transfer record.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct DailyXfer {
+    pub when: i32,
+    pub up: f64,
+    pub down: f64,
+}
+
+/// Daily transfer history.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct DailyXferHistory {
+    pub daily_xfers: Vec<DailyXfer>,
+}
+
+/// An old (completed) result.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct OldResult {
+    pub project_url: String,
+    pub result_name: String,
+    pub app_name: String,
+    pub exit_status: i32,
+    pub elapsed_time: f64,
+    pub cpu_time: f64,
+    pub completed_time: f64,
+    pub create_time: f64,
 }

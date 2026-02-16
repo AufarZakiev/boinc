@@ -18,17 +18,24 @@ import type { ContextMenuItem } from "../components/ContextMenu.vue";
 import ColumnCustomizationDialog from "../components/ColumnCustomizationDialog.vue";
 import ItemPropertiesDialog from "../components/ItemPropertiesDialog.vue";
 import { useKeyboard } from "../composables/useKeyboard";
-import { launchGraphics } from "../composables/useRpc";
+import { useColumnState } from "../composables/useColumnState";
+import { launchGraphics, launchRemoteDesktop } from "../composables/useRpc";
+import { useToastStore } from "../stores/toast";
 
 const store = useTasksStore();
+const toast = useToastStore();
+const actionBusy = ref(false);
 
 const selectedNames = ref<Set<string>>(new Set());
 const lastClickedIndex = ref<number | null>(null);
 const confirmAbort = ref(false);
 const activeTasksOnly = ref(false);
-const sortKey = ref("progress");
-const sortDir = ref<"asc" | "desc">("desc");
-const visibleKeys = ref(["task", "project", "progress", "elapsed", "remaining", "status"]);
+const { sortKey, sortDir, visibleKeys } = useColumnState(
+  "tasks",
+  ["task", "project", "progress", "elapsed", "remaining", "status"],
+  "progress",
+  "desc",
+);
 const showColumns = ref(false);
 const showProperties = ref(false);
 const propertiesTask = ref<TaskResult | null>(null);
@@ -227,6 +234,11 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
     action: "graphics",
     disabled: !hasGraphics.value,
   });
+  items.push({
+    label: "Show VM Console",
+    action: "vm-console",
+    disabled: !hasVmConsole.value,
+  });
   items.push({ label: "", action: "", divider: true });
   items.push({
     label: "Abort",
@@ -265,9 +277,20 @@ async function handleShowGraphics() {
   }
 }
 
+async function handleShowVmConsole() {
+  const task = selectedTasks.value[0];
+  if (!task || !task.remote_desktop_addr) return;
+  await launchRemoteDesktop(task.remote_desktop_addr);
+}
+
 const hasGraphics = computed(() => {
   const task = selectedTasks.value.length === 1 ? selectedTasks.value[0] : null;
   return task && (task.graphics_exec_path || task.web_graphics_url);
+});
+
+const hasVmConsole = computed(() => {
+  const task = selectedTasks.value.length === 1 ? selectedTasks.value[0] : null;
+  return task && task.remote_desktop_addr;
 });
 
 async function handleContextAction(action: string) {
@@ -284,25 +307,44 @@ async function handleContextAction(action: string) {
     case "graphics":
       await handleShowGraphics();
       break;
+    case "vm-console":
+      await handleShowVmConsole();
+      break;
   }
 }
 
 async function handleSuspendResume() {
-  for (const task of selectedTasks.value) {
-    if (task.suspended_via_gui) {
-      await store.resumeTask(task.project_url, task.name);
-    } else {
-      await store.suspendTask(task.project_url, task.name);
+  actionBusy.value = true;
+  try {
+    for (const task of selectedTasks.value) {
+      if (task.suspended_via_gui) {
+        await store.resumeTask(task.project_url, task.name);
+      } else {
+        await store.suspendTask(task.project_url, task.name);
+      }
     }
+    toast.show(allSelectedSuspended.value ? "Tasks resumed" : "Tasks suspended", "success");
+  } catch (e) {
+    toast.show(`Action failed: ${e}`, "error");
+  } finally {
+    actionBusy.value = false;
   }
 }
 
 async function doAbort() {
-  for (const task of selectedTasks.value) {
-    await store.abortTask(task.project_url, task.name);
+  actionBusy.value = true;
+  try {
+    for (const task of selectedTasks.value) {
+      await store.abortTask(task.project_url, task.name);
+    }
+    toast.show("Tasks aborted", "success");
+  } catch (e) {
+    toast.show(`Abort failed: ${e}`, "error");
+  } finally {
+    actionBusy.value = false;
+    selectedNames.value = new Set();
+    confirmAbort.value = false;
   }
-  selectedNames.value = new Set();
-  confirmAbort.value = false;
 }
 
 // Keyboard shortcuts
@@ -329,13 +371,13 @@ function isColVisible(key: string): boolean {
         Active Tasks Only
       </button>
       <template v-if="hasSelection">
-        <button class="btn" @click="handleSuspendResume">
+        <button class="btn" :disabled="actionBusy" @click="handleSuspendResume">
           {{ suspendResumeLabel }}
         </button>
-        <button v-if="hasGraphics" class="btn" @click="handleShowGraphics">
+        <button v-if="hasGraphics" class="btn" :disabled="actionBusy" @click="handleShowGraphics">
           Graphics
         </button>
-        <button class="btn btn-danger" @click="confirmAbort = true">
+        <button class="btn btn-danger" :disabled="actionBusy" @click="confirmAbort = true">
           Abort
         </button>
         <button v-if="selectedNames.size === 1" class="btn" @click="openProperties">

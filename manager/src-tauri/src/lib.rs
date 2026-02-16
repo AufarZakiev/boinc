@@ -1,13 +1,16 @@
 mod rpc;
+mod tray;
 
 use rpc::{
-    AccountOut, AcctMgrInfo, AcctMgrRpcReply, CcConfig, CcStatus, ConnectionState, DiskUsage,
-    FileTransfer, GlobalPreferences, HostInfo, Message, NewerVersionInfo, Notice, Project,
-    ProjectAttachReply, ProjectConfig, ProjectListEntry, ProjectStatistics, ProxyInfo, RpcClient,
-    TaskResult,
+    AccountOut, AcctMgrInfo, AcctMgrRpcReply, CcConfig, CcState, CcStatus, ConnectionState,
+    DailyXferHistory, DiskUsage, FileTransfer, GlobalPreferences, HostInfo, Message,
+    NewerVersionInfo, Notice, OldResult, Project, ProjectAttachReply, ProjectConfig,
+    ProjectInitStatus, ProjectListEntry, ProjectStatistics, ProxyInfo, RpcClient, TaskResult,
+    VersionInfo,
 };
 use std::sync::Arc;
-use tauri::State;
+use tauri::{Manager, State};
+use tauri_plugin_cli::CliExt;
 use tokio::sync::Mutex;
 
 struct AppState {
@@ -557,7 +560,123 @@ async fn get_newer_version(
     client.get_newer_version().await
 }
 
-// ── Graphics launcher (Phase 7) ─────────────────────────────────
+// ── Exchange versions ────────────────────────────────────────────
+
+#[tauri::command]
+async fn exchange_versions(
+    state: State<'_, AppState>,
+) -> Result<VersionInfo, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.exchange_versions().await
+}
+
+// ── Get state ───────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_state(
+    state: State<'_, AppState>,
+) -> Result<CcState, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_state().await
+}
+
+// ── Read commands ───────────────────────────────────────────────
+
+#[tauri::command]
+async fn read_global_prefs_override(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.read_global_prefs_override().await
+}
+
+#[tauri::command]
+async fn read_cc_config(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.read_cc_config().await
+}
+
+#[tauri::command]
+async fn get_global_prefs_working(
+    state: State<'_, AppState>,
+) -> Result<GlobalPreferences, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_global_prefs_working().await
+}
+
+// ── Language ────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn set_language(
+    state: State<'_, AppState>,
+    lang: String,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.set_language(&lang).await
+}
+
+// ── Project init ────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_project_init_status(
+    state: State<'_, AppState>,
+) -> Result<ProjectInitStatus, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_project_init_status().await
+}
+
+#[tauri::command]
+async fn project_attach_from_file(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.project_attach_from_file().await
+}
+
+// ── Old results ─────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_old_results(
+    state: State<'_, AppState>,
+) -> Result<Vec<OldResult>, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_old_results().await
+}
+
+// ── Message count ───────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_message_count(
+    state: State<'_, AppState>,
+) -> Result<i32, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_message_count().await
+}
+
+// ── Daily transfer history ──────────────────────────────────────
+
+#[tauri::command]
+async fn get_daily_xfer_history(
+    state: State<'_, AppState>,
+) -> Result<DailyXferHistory, String> {
+    let guard = state.client.lock().await;
+    let client = guard.as_ref().ok_or("Not connected")?;
+    client.get_daily_xfer_history().await
+}
+
+// ── Graphics launcher ───────────────────────────────────────────
 
 #[tauri::command]
 fn launch_graphics(path: String) -> Result<(), String> {
@@ -567,12 +686,106 @@ fn launch_graphics(path: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn launch_remote_desktop(addr: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("mstsc")
+            .arg(format!("/v:{addr}"))
+            .spawn()
+            .map_err(|e| format!("Failed to launch remote desktop: {e}"))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // Try xfreerdp first, fall back to rdesktop
+        let result = std::process::Command::new("xfreerdp")
+            .arg(format!("/v:{addr}"))
+            .spawn();
+        if result.is_err() {
+            std::process::Command::new("rdesktop")
+                .arg(&addr)
+                .spawn()
+                .map_err(|e| format!("Failed to launch remote desktop: {e}"))?;
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(format!("rdp://full%20address=s:{addr}"))
+            .spawn()
+            .map_err(|e| format!("Failed to launch remote desktop: {e}"))?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_cli::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // Focus existing window when second instance is launched
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .manage(AppState {
             client: Arc::new(Mutex::new(None)),
+        })
+        .setup(|app| {
+            let handle = app.handle().clone();
+            tray::setup_tray(&handle).expect("failed to setup tray");
+
+            // Parse CLI args
+            if let Ok(matches) = app.cli().matches() {
+                let autostart = matches
+                    .args
+                    .get("autostart")
+                    .map(|a| a.occurrences > 0)
+                    .unwrap_or(false);
+
+                if autostart {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.hide();
+                    }
+                }
+
+                // Emit CLI connection info to frontend
+                let host = matches
+                    .args
+                    .get("host")
+                    .and_then(|a| a.value.as_str().map(String::from));
+                let port = matches
+                    .args
+                    .get("port")
+                    .and_then(|a| a.value.as_str().map(String::from));
+                let password = matches
+                    .args
+                    .get("password")
+                    .and_then(|a| a.value.as_str().map(String::from));
+                let datadir = matches
+                    .args
+                    .get("datadir")
+                    .and_then(|a| a.value.as_str().map(String::from));
+
+                if host.is_some() || datadir.is_some() {
+                    use tauri::Emitter;
+                    let _ = app.emit(
+                        "cli-connect",
+                        serde_json::json!({
+                            "host": host,
+                            "port": port,
+                            "password": password,
+                            "datadir": datadir,
+                        }),
+                    );
+                }
+            }
+
+            Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             connect,
@@ -613,7 +826,6 @@ pub fn run() {
             lookup_account_poll,
             project_attach,
             project_attach_poll,
-            // Phase 4
             get_project_config,
             get_project_config_poll,
             create_account,
@@ -622,15 +834,24 @@ pub fn run() {
             acct_mgr_info,
             acct_mgr_rpc,
             acct_mgr_rpc_poll,
-            // Phase 5
             get_proxy_settings,
             set_proxy_settings,
             get_cc_config,
             set_cc_config,
-            // Phase 6
             get_newer_version,
-            // Phase 7
             launch_graphics,
+            launch_remote_desktop,
+            exchange_versions,
+            get_state,
+            read_global_prefs_override,
+            read_cc_config,
+            get_global_prefs_working,
+            set_language,
+            get_project_init_status,
+            project_attach_from_file,
+            get_old_results,
+            get_message_count,
+            get_daily_xfer_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

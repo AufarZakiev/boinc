@@ -1,8 +1,9 @@
 use super::connection::RpcClient;
 use super::types::{
-    AccountOut, AcctMgrInfo, AcctMgrRpcReply, CcConfig, CcStatus, DiskUsage, FileTransfer,
-    GlobalPreferences, HostInfo, Message, NewerVersionInfo, Notice, Project, ProjectAttachReply,
-    ProjectConfig, ProjectListEntry, ProjectStatistics, ProxyInfo, TaskResult,
+    AccountOut, AcctMgrInfo, AcctMgrRpcReply, CcConfig, CcState, CcStatus, DailyXferHistory,
+    DiskUsage, FileTransfer, GlobalPreferences, HostInfo, Message, NewerVersionInfo, Notice,
+    OldResult, Project, ProjectAttachReply, ProjectConfig, ProjectInitStatus, ProjectListEntry,
+    ProjectStatistics, ProxyInfo, TaskResult, VersionInfo,
 };
 use super::xml_parse;
 
@@ -373,10 +374,87 @@ impl RpcClient {
         xml_parse::parse_success(&xml)
     }
 
-    // ── Version check (Phase 6) ──────────────────────────────────
+    // ── Version check ─────────────────────────────────────────────
 
     pub async fn get_newer_version(&self) -> Result<NewerVersionInfo, String> {
         let xml = self.rpc_call("<get_newer_version/>").await?;
         Ok(xml_parse::parse_newer_version(&xml))
+    }
+
+    // ── Exchange versions ───────────────────────────────────────
+
+    pub async fn exchange_versions(&self) -> Result<VersionInfo, String> {
+        let req = "<exchange_versions>\n\
+                   <major>8</major>\n\
+                   <minor>0</minor>\n\
+                   <release>0</release>\n\
+                   </exchange_versions>";
+        let xml = self.rpc_call(req).await?;
+        Ok(xml_parse::parse_version_info(&xml))
+    }
+
+    // ── Get state ───────────────────────────────────────────────
+
+    pub async fn get_state(&self) -> Result<CcState, String> {
+        let xml = self.rpc_call("<get_state/>").await?;
+        Ok(xml_parse::parse_cc_state(&xml))
+    }
+
+    // ── Read commands ───────────────────────────────────────────
+
+    pub async fn read_global_prefs_override(&self) -> Result<(), String> {
+        let xml = self.rpc_call("<read_global_prefs_override/>").await?;
+        xml_parse::parse_success(&xml)
+    }
+
+    pub async fn read_cc_config(&self) -> Result<(), String> {
+        let xml = self.rpc_call("<read_cc_config/>").await?;
+        xml_parse::parse_success(&xml)
+    }
+
+    pub async fn get_global_prefs_working(&self) -> Result<GlobalPreferences, String> {
+        let xml = self.rpc_call("<get_global_prefs_working/>").await?;
+        Ok(xml_parse::parse_global_preferences(&xml))
+    }
+
+    // ── Language ────────────────────────────────────────────────
+
+    pub async fn set_language(&self, lang: &str) -> Result<(), String> {
+        let req = format!("<set_language>\n<language>{lang}</language>\n</set_language>");
+        let xml = self.rpc_call(&req).await?;
+        xml_parse::parse_success(&xml)
+    }
+
+    // ── Project init ────────────────────────────────────────────
+
+    pub async fn get_project_init_status(&self) -> Result<ProjectInitStatus, String> {
+        let xml = self.rpc_call("<get_project_init_status/>").await?;
+        Ok(xml_parse::parse_project_init_status(&xml))
+    }
+
+    pub async fn project_attach_from_file(&self) -> Result<(), String> {
+        let xml = self.rpc_call("<project_attach>\n<use_config_file/>\n</project_attach>").await?;
+        xml_parse::parse_success(&xml).or(Ok(()))
+    }
+
+    // ── Old results ─────────────────────────────────────────────
+
+    pub async fn get_old_results(&self) -> Result<Vec<OldResult>, String> {
+        let xml = self.rpc_call("<get_old_results/>").await?;
+        Ok(xml_parse::parse_old_results(&xml))
+    }
+
+    // ── Message count ───────────────────────────────────────────
+
+    pub async fn get_message_count(&self) -> Result<i32, String> {
+        let xml = self.rpc_call("<get_message_count/>").await?;
+        Ok(xml_parse::parse_message_count(&xml))
+    }
+
+    // ── Daily transfer history ──────────────────────────────────
+
+    pub async fn get_daily_xfer_history(&self) -> Result<DailyXferHistory, String> {
+        let xml = self.rpc_call("<get_daily_xfer_history/>").await?;
+        Ok(xml_parse::parse_daily_xfer_history(&xml))
     }
 }

@@ -25,6 +25,14 @@ const defaultStatus: CcStatus = {
   network_mode_perm: 2,
   network_mode_delay: 0,
   network_status: 0,
+  task_suspend_reason: 0,
+  gpu_suspend_reason: 0,
+  network_suspend_reason: 0,
+  ams_password_error: false,
+  manager_must_quit: false,
+  disallow_attach: false,
+  simple_gui_only: false,
+  max_event_log_lines: 0,
 };
 
 function mockInvokeHandler(cmd: string, _args?: unknown): unknown {

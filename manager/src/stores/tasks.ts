@@ -7,6 +7,7 @@ import {
   resumeTask as rpcResumeTask,
   abortTask as rpcAbortTask,
 } from "../composables/useRpc";
+import { useConnectionStore } from "./connection";
 
 export const useTasksStore = defineStore("tasks", () => {
   const tasks = ref<TaskResult[]>([]);
@@ -22,6 +23,8 @@ export const useTasksStore = defineStore("tasks", () => {
       tasks.value = await getResults(false);
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e);
+      const connection = useConnectionStore();
+      connection.handleConnectionError();
     } finally {
       loading.value = false;
     }

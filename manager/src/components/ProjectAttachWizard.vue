@@ -15,7 +15,7 @@ import {
 import type { ProjectListEntry, ProjectConfig } from "../types/boinc";
 import { useProjectsStore } from "../stores/projects";
 
-const props = defineProps<{ open: boolean }>();
+defineProps<{ open: boolean }>();
 const emit = defineEmits<{ close: [] }>();
 
 const projects = useProjectsStore();

@@ -3,6 +3,7 @@ import type {
   TaskResult,
   Project,
   CcStatus,
+  CcState,
   FileTransfer,
   ProjectStatistics,
   Message,
@@ -19,6 +20,10 @@ import type {
   ProxyInfo,
   CcConfig,
   NewerVersionInfo,
+  VersionInfo,
+  ProjectInitStatus,
+  DailyXferHistory,
+  OldResult,
 } from "../types/boinc";
 
 /**
@@ -323,4 +328,68 @@ export async function getNewerVersion(): Promise<NewerVersionInfo> {
 
 export async function launchGraphics(path: string): Promise<void> {
   return invoke("launch_graphics", { path });
+}
+
+export async function launchRemoteDesktop(addr: string): Promise<void> {
+  return invoke("launch_remote_desktop", { addr });
+}
+
+// ── Exchange versions ───────────────────────────────────────────
+
+export async function exchangeVersions(): Promise<VersionInfo> {
+  return invoke("exchange_versions");
+}
+
+// ── Get state ───────────────────────────────────────────────────
+
+export async function getState(): Promise<CcState> {
+  return invoke("get_state");
+}
+
+// ── Read commands ───────────────────────────────────────────────
+
+export async function readGlobalPrefsOverride(): Promise<void> {
+  return invoke("read_global_prefs_override");
+}
+
+export async function readCcConfig(): Promise<void> {
+  return invoke("read_cc_config");
+}
+
+export async function getGlobalPrefsWorking(): Promise<GlobalPreferences> {
+  return invoke("get_global_prefs_working");
+}
+
+// ── Language ────────────────────────────────────────────────────
+
+export async function setLanguage(lang: string): Promise<void> {
+  return invoke("set_language", { lang });
+}
+
+// ── Project init ────────────────────────────────────────────────
+
+export async function getProjectInitStatus(): Promise<ProjectInitStatus> {
+  return invoke("get_project_init_status");
+}
+
+export async function projectAttachFromFile(): Promise<void> {
+  return invoke("project_attach_from_file");
+}
+
+// ── Old results ─────────────────────────────────────────────────
+
+export async function getOldResults(): Promise<OldResult[]> {
+  return invoke("get_old_results");
+}
+
+// ── Message count ───────────────────────────────────────────────
+
+export async function getMessageCount(): Promise<number> {
+  return invoke("get_message_count");
+}
+
+// ── Daily transfer history ──────────────────────────────────────
+
+export async function getDailyXferHistory(): Promise<DailyXferHistory> {
+  return invoke("get_daily_xfer_history");
 }

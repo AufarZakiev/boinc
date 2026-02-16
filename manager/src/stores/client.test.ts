@@ -26,6 +26,11 @@ function makeStatus(overrides: Partial<CcStatus> = {}): CcStatus {
     task_suspend_reason: 0,
     gpu_suspend_reason: 0,
     network_suspend_reason: 0,
+    ams_password_error: false,
+    manager_must_quit: false,
+    disallow_attach: false,
+    simple_gui_only: false,
+    max_event_log_lines: 0,
     ...overrides,
   };
 }

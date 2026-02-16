@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useStatisticsStore } from "../stores/statistics";
-import type { DailyStats, ProjectStatistics } from "../types/boinc";
+import type { DailyStats } from "../types/boinc";
 import PageHeader from "../components/PageHeader.vue";
 import EmptyState from "../components/EmptyState.vue";
+import StatisticsChart from "../components/StatisticsChart.vue";
 
 const store = useStatisticsStore();
 
-type ViewMode = "single" | "all" | "total";
+type ViewMode = "single" | "all" | "separate" | "total";
 
 const viewMode = ref<ViewMode>("single");
 const selectedProjectUrl = ref("");
-const hoveredPoint = ref<{ x: number; y: number; label: string; value: number } | null>(null);
 
 const seriesConfig = [
   { key: "user_total_credit" as const, label: "User Total", color: "#3b82f6" },
@@ -41,187 +41,56 @@ const activeProject = computed(() => {
   return store.projectStats.find((p) => p.master_url === selectedProjectUrl.value);
 });
 
+function mergeAllProjects(): DailyStats[] {
+  const dayMap = new Map<number, DailyStats>();
+  for (const project of store.projectStats) {
+    for (const ds of project.daily_statistics) {
+      const existing = dayMap.get(ds.day);
+      if (existing) {
+        existing.user_total_credit += ds.user_total_credit;
+        existing.user_expavg_credit += ds.user_expavg_credit;
+        existing.host_total_credit += ds.host_total_credit;
+        existing.host_expavg_credit += ds.host_expavg_credit;
+      } else {
+        dayMap.set(ds.day, { ...ds });
+      }
+    }
+  }
+  return Array.from(dayMap.values()).sort((a, b) => a.day - b.day);
+}
+
 const chartData = computed(() => {
   if (store.projectStats.length === 0) return null;
 
-  let stats: DailyStats[];
-
   if (viewMode.value === "single") {
     if (!activeProject.value) return null;
-    stats = activeProject.value.daily_statistics;
-  } else if (viewMode.value === "all") {
-    // Merge all projects by day
-    const dayMap = new Map<number, DailyStats>();
-    for (const project of store.projectStats) {
-      for (const ds of project.daily_statistics) {
-        const existing = dayMap.get(ds.day);
-        if (existing) {
-          existing.user_total_credit += ds.user_total_credit;
-          existing.user_expavg_credit += ds.user_expavg_credit;
-          existing.host_total_credit += ds.host_total_credit;
-          existing.host_expavg_credit += ds.host_expavg_credit;
-        } else {
-          dayMap.set(ds.day, { ...ds });
-        }
-      }
-    }
-    stats = Array.from(dayMap.values()).sort((a, b) => a.day - b.day);
-  } else {
-    // "total" mode same as "all" but summed
-    const dayMap = new Map<number, DailyStats>();
-    for (const project of store.projectStats) {
-      for (const ds of project.daily_statistics) {
-        const existing = dayMap.get(ds.day);
-        if (existing) {
-          existing.user_total_credit += ds.user_total_credit;
-          existing.user_expavg_credit += ds.user_expavg_credit;
-          existing.host_total_credit += ds.host_total_credit;
-          existing.host_expavg_credit += ds.host_expavg_credit;
-        } else {
-          dayMap.set(ds.day, { ...ds });
-        }
-      }
-    }
-    stats = Array.from(dayMap.values()).sort((a, b) => a.day - b.day);
+    const stats = activeProject.value.daily_statistics;
+    return stats.length === 0 ? null : stats;
+  } else if (viewMode.value === "all" || viewMode.value === "total") {
+    const stats = mergeAllProjects();
+    return stats.length === 0 ? null : stats;
   }
 
-  if (stats.length === 0) return null;
-  return stats;
+  // "separate" mode is handled differently — returns null here
+  return null;
 });
 
-const SVG_WIDTH = 700;
-const SVG_HEIGHT = 340;
-const PADDING = { top: 20, right: 20, bottom: 50, left: 70 };
-
-const chartW = SVG_WIDTH - PADDING.left - PADDING.right;
-const chartH = SVG_HEIGHT - PADDING.top - PADDING.bottom;
-
-function dayToDate(day: number): Date {
-  return new Date(day * 86400 * 1000);
-}
-
-function formatDateShort(day: number): string {
-  const d = dayToDate(day);
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-const yMax = computed(() => {
-  if (!chartData.value) return 1;
-  let max = 0;
-  for (const ds of chartData.value) {
-    for (const s of seriesConfig) {
-      if (enabledSeries.value.has(s.key)) {
-        max = Math.max(max, ds[s.key]);
-      }
-    }
-  }
-  return max > 0 ? max : 1;
+const separateCharts = computed(() => {
+  if (viewMode.value !== "separate") return [];
+  return store.projectStats
+    .filter((p) => p.daily_statistics.length > 0)
+    .map((p) => ({
+      url: p.master_url,
+      data: [...p.daily_statistics].sort((a, b) => a.day - b.day),
+    }));
 });
-
-const xRange = computed(() => {
-  if (!chartData.value || chartData.value.length === 0) return { min: 0, max: 1 };
-  const days = chartData.value.map((d) => d.day);
-  const min = Math.min(...days);
-  const max = Math.max(...days);
-  return { min, max: max === min ? min + 1 : max };
-});
-
-function scaleX(day: number): number {
-  const range = xRange.value;
-  return PADDING.left + ((day - range.min) / (range.max - range.min)) * chartW;
-}
-
-function scaleY(value: number): number {
-  return PADDING.top + chartH - (value / yMax.value) * chartH;
-}
-
-function polylinePoints(key: keyof DailyStats): string {
-  if (!chartData.value) return "";
-  return chartData.value
-    .map((ds) => `${scaleX(ds.day)},${scaleY(ds[key] as number)}`)
-    .join(" ");
-}
-
-const xTicks = computed(() => {
-  if (!chartData.value || chartData.value.length === 0) return [];
-  const days = chartData.value.map((d) => d.day);
-  const count = Math.min(days.length, 8);
-  const step = Math.max(1, Math.floor(days.length / count));
-  const ticks: number[] = [];
-  for (let i = 0; i < days.length; i += step) {
-    ticks.push(days[i]);
-  }
-  return ticks;
-});
-
-const yTicks = computed(() => {
-  const max = yMax.value;
-  const ticks: number[] = [];
-  const step = max / 5;
-  for (let i = 0; i <= 5; i++) {
-    ticks.push(step * i);
-  }
-  return ticks;
-});
-
-function formatCredit(value: number): string {
-  if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
-  if (value >= 1e3) return `${(value / 1e3).toFixed(1)}K`;
-  return value.toFixed(0);
-}
-
-function handleChartMouseMove(event: MouseEvent) {
-  if (!chartData.value || chartData.value.length === 0) return;
-  const svg = event.currentTarget as SVGSVGElement;
-  const rect = svg.getBoundingClientRect();
-  const mouseX = event.clientX - rect.left;
-
-  // Find closest data point
-  let closest: DailyStats | null = null;
-  let closestDist = Infinity;
-  for (const ds of chartData.value) {
-    const sx = scaleX(ds.day);
-    const dist = Math.abs(sx - mouseX);
-    if (dist < closestDist) {
-      closestDist = dist;
-      closest = ds;
-    }
-  }
-
-  if (closest && closestDist < 30) {
-    // Find the best enabled series value
-    let bestKey = "";
-    let bestVal = 0;
-    for (const s of seriesConfig) {
-      if (enabledSeries.value.has(s.key)) {
-        const val = closest[s.key];
-        if (val > bestVal) {
-          bestVal = val;
-          bestKey = s.label;
-        }
-      }
-    }
-    hoveredPoint.value = {
-      x: scaleX(closest.day),
-      y: scaleY(bestVal),
-      label: `${formatDateShort(closest.day)} - ${bestKey}: ${formatCredit(bestVal)}`,
-      value: bestVal,
-    };
-  } else {
-    hoveredPoint.value = null;
-  }
-}
-
-function handleChartMouseLeave() {
-  hoveredPoint.value = null;
-}
 
 onMounted(() => {
   store.fetchStatistics();
 });
 
 onUnmounted(() => {
-  // nothing to clean up in this component
+  // nothing to clean up
 });
 </script>
 
@@ -255,6 +124,12 @@ onUnmounted(() => {
           @click="viewMode = 'all'"
         >
           All Together
+        </button>
+        <button
+          :class="['segment', { active: viewMode === 'separate' }]"
+          @click="viewMode = 'separate'"
+        >
+          All Separate
         </button>
         <button
           :class="['segment', { active: viewMode === 'total' }]"
@@ -291,123 +166,27 @@ onUnmounted(() => {
         </label>
       </div>
 
-      <!-- SVG Chart -->
-      <div class="chart-container">
-        <svg
-          :width="SVG_WIDTH"
-          :height="SVG_HEIGHT"
-          class="chart-svg"
-          @mousemove="handleChartMouseMove"
-          @mouseleave="handleChartMouseLeave"
-        >
-          <!-- Grid lines -->
-          <line
-            v-for="tick in yTicks"
-            :key="'yg-' + tick"
-            :x1="PADDING.left"
-            :y1="scaleY(tick)"
-            :x2="SVG_WIDTH - PADDING.right"
-            :y2="scaleY(tick)"
-            class="grid-line"
-          />
+      <!-- Single chart for single/all/total modes -->
+      <StatisticsChart
+        v-if="chartData && viewMode !== 'separate'"
+        :data="chartData"
+        :enabled-series="enabledSeries"
+      />
 
-          <!-- Y axis labels -->
-          <text
-            v-for="tick in yTicks"
-            :key="'yl-' + tick"
-            :x="PADDING.left - 8"
-            :y="scaleY(tick) + 4"
-            class="axis-label axis-label-y"
-          >
-            {{ formatCredit(tick) }}
-          </text>
-
-          <!-- X axis labels -->
-          <text
-            v-for="tick in xTicks"
-            :key="'xl-' + tick"
-            :x="scaleX(tick)"
-            :y="SVG_HEIGHT - PADDING.bottom + 20"
-            class="axis-label axis-label-x"
-          >
-            {{ formatDateShort(tick) }}
-          </text>
-
-          <!-- Axis lines -->
-          <line
-            :x1="PADDING.left"
-            :y1="PADDING.top"
-            :x2="PADDING.left"
-            :y2="PADDING.top + chartH"
-            class="axis-line"
-          />
-          <line
-            :x1="PADDING.left"
-            :y1="PADDING.top + chartH"
-            :x2="SVG_WIDTH - PADDING.right"
-            :y2="PADDING.top + chartH"
-            class="axis-line"
-          />
-
-          <!-- Data series -->
-          <template v-if="chartData && chartData.length > 1">
-            <polyline
-              v-for="s in seriesConfig.filter((sc) => enabledSeries.has(sc.key))"
-              :key="s.key"
-              :points="polylinePoints(s.key as keyof DailyStats)"
-              fill="none"
-              :stroke="s.color"
-              stroke-width="2"
-              stroke-linejoin="round"
-              stroke-linecap="round"
-            />
-          </template>
-
-          <!-- Single point indicator -->
-          <template v-if="chartData && chartData.length === 1">
-            <circle
-              v-for="s in seriesConfig.filter((sc) => enabledSeries.has(sc.key))"
-              :key="'dot-' + s.key"
-              :cx="scaleX(chartData[0].day)"
-              :cy="scaleY(chartData[0][s.key as keyof DailyStats] as number)"
-              r="4"
-              :fill="s.color"
-            />
-          </template>
-
-          <!-- Hover indicator -->
-          <template v-if="hoveredPoint">
-            <line
-              :x1="hoveredPoint.x"
-              :y1="PADDING.top"
-              :x2="hoveredPoint.x"
-              :y2="PADDING.top + chartH"
-              stroke="var(--color-text-tertiary)"
-              stroke-width="1"
-              stroke-dasharray="4 2"
-            />
-            <circle
-              :cx="hoveredPoint.x"
-              :cy="hoveredPoint.y"
-              r="5"
-              fill="var(--color-accent)"
-              stroke="white"
-              stroke-width="2"
-            />
-          </template>
-        </svg>
-
-        <!-- Tooltip -->
-        <div
-          v-if="hoveredPoint"
-          class="chart-tooltip"
-          :style="{
-            left: hoveredPoint.x + 'px',
-            top: (hoveredPoint.y - 10) + 'px',
-          }"
-        >
-          {{ hoveredPoint.label }}
-        </div>
+      <!-- Separate charts: one per project -->
+      <div v-if="viewMode === 'separate'" class="separate-charts">
+        <StatisticsChart
+          v-for="chart in separateCharts"
+          :key="chart.url"
+          :data="chart.data"
+          :title="chart.url"
+          :enabled-series="enabledSeries"
+        />
+        <EmptyState
+          v-if="separateCharts.length === 0"
+          icon="&#x1f4ca;"
+          message="No project statistics to display."
+        />
       </div>
     </template>
   </div>
@@ -528,57 +307,9 @@ onUnmounted(() => {
   text-decoration: line-through;
 }
 
-.chart-container {
-  position: relative;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-md);
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
-  display: inline-block;
-  max-width: 100%;
-}
-
-.chart-svg {
-  display: block;
-  max-width: 100%;
-  height: auto;
-}
-
-.grid-line {
-  stroke: var(--color-border-light);
-  stroke-width: 1;
-}
-
-.axis-line {
-  stroke: var(--color-border);
-  stroke-width: 1;
-}
-
-.axis-label {
-  font-size: 10px;
-  fill: var(--color-text-tertiary);
-}
-
-.axis-label-y {
-  text-anchor: end;
-}
-
-.axis-label-x {
-  text-anchor: middle;
-}
-
-.chart-tooltip {
-  position: absolute;
-  transform: translate(-50%, -100%);
-  background: var(--color-text-primary);
-  color: var(--color-bg);
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-xs);
-  white-space: nowrap;
-  pointer-events: none;
-  z-index: 10;
+.separate-charts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
 }
 </style>

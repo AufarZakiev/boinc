@@ -23,6 +23,7 @@ const gpuSuspendText = computed(() =>
         class="status-dot"
         :class="{
           'status-dot-connected': connection.state === 'Connected',
+          'status-dot-reconnecting': connection.state === 'Reconnecting',
           'status-dot-error':
             connection.state === 'AuthError' ||
             (typeof connection.state === 'object' && 'Error' in connection.state),
@@ -33,15 +34,17 @@ const gpuSuspendText = computed(() =>
       <span>{{
         connection.state === "Connected"
           ? "Connected"
-          : connection.state === "Connecting"
-            ? "Connecting..."
-            : connection.state === "AuthError"
-              ? "Auth Error"
-              : connection.state === "Disconnected"
-                ? "Disconnected"
-                : typeof connection.state === "object" && "Error" in connection.state
-                  ? "Error"
-                  : "Disconnected"
+          : connection.state === "Reconnecting"
+            ? `Reconnecting (${connection.reconnectAttempt}/${connection.maxReconnectAttempts})...`
+            : connection.state === "Connecting"
+              ? "Connecting..."
+              : connection.state === "AuthError"
+                ? "Auth Error"
+                : connection.state === "Disconnected"
+                  ? "Disconnected"
+                  : typeof connection.state === "object" && "Error" in connection.state
+                    ? "Error"
+                    : "Disconnected"
       }}</span>
     </div>
 
@@ -93,6 +96,16 @@ const gpuSuspendText = computed(() =>
 
 .status-dot-connected {
   background: var(--color-success);
+}
+
+.status-dot-reconnecting {
+  background: var(--color-warning);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 .status-dot-error {

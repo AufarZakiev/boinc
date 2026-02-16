@@ -81,10 +81,14 @@ export interface CcStatus {
   network_mode_perm: number;
   network_mode_delay: number;
   network_status: number;
-  // Suspend reasons (Phase 3)
   task_suspend_reason: number;
   gpu_suspend_reason: number;
   network_suspend_reason: number;
+  ams_password_error: boolean;
+  manager_must_quit: boolean;
+  disallow_attach: boolean;
+  simple_gui_only: boolean;
+  max_event_log_lines: number;
 }
 
 /** Matches Rust FileTransfer / BOINC FILE_TRANSFER struct. */
@@ -97,6 +101,14 @@ export interface FileTransfer {
   bytes_xferred: number;
   xfer_speed: number;
   is_upload: boolean;
+  num_retries: number;
+  first_request_time: number;
+  next_request_time: number;
+  time_so_far: number;
+  estimated_xfer_time_remaining: number;
+  file_offset: number;
+  hostname: string;
+  project_backoff: number;
 }
 
 /** BOINC run mode codes (from common_defs.h). */
@@ -112,6 +124,7 @@ export type ConnectionState =
   | "Disconnected"
   | "Connecting"
   | "Connected"
+  | "Reconnecting"
   | "AuthError"
   | { Error: string };
 
@@ -232,6 +245,7 @@ export interface DayOfWeekPrefs {
 export interface GlobalPreferences {
   run_on_batteries: boolean;
   run_if_user_active: boolean;
+  run_gpu_if_user_active: boolean;
   idle_time_to_run: number;
   max_ncpus_pct: number;
   cpu_usage_limit: number;
@@ -240,20 +254,32 @@ export interface GlobalPreferences {
   max_bytes_sec_down: number;
   max_bytes_sec_up: number;
   daily_xfer_limit_mb: number;
+  daily_xfer_period_days: number;
   disk_max_used_gb: number;
   disk_max_used_pct: number;
   disk_min_free_gb: number;
+  disk_interval: number;
   work_buf_min_days: number;
   cpu_scheduling_period_minutes: number;
   start_hour: number;
   end_hour: number;
   net_start_hour: number;
   net_end_hour: number;
-  // Enhanced preferences (Phase 5)
   suspend_if_no_recent_input: number;
   suspend_cpu_usage: number;
+  niu_suspend_cpu_usage: number;
+  niu_cpu_usage_limit: number;
+  niu_max_ncpus_pct: number;
   leave_apps_in_memory: boolean;
+  dont_verify_images: boolean;
+  confirm_before_connecting: boolean;
+  hangup_if_dialed: boolean;
+  network_wifi_only: boolean;
   work_buf_additional_days: number;
+  max_ncpus: number;
+  battery_charge_min_pct: number;
+  battery_max_temperature: number;
+  vm_max_used_frac: number;
   day_prefs: DayOfWeekPrefs[];
 }
 
@@ -275,6 +301,14 @@ export interface HostInfo {
   os_version: string;
   product_name: string;
   virtualbox_version: string;
+  timezone: number;
+  host_cpid: string;
+  p_features: string;
+  p_membw: number;
+  p_calculated: number;
+  p_vm_extensions_disabled: boolean;
+  mac_address: string;
+  docker_version: string;
 }
 
 /** Entry in the all-projects list. */
@@ -348,7 +382,7 @@ export interface ProxyInfo {
   noproxy_hosts: string;
 }
 
-/** Log flags (Phase 5). */
+/** Log flags. */
 export interface LogFlags {
   task: boolean;
   file_xfer: boolean;
@@ -360,20 +394,92 @@ export interface LogFlags {
   http_debug: boolean;
   state_debug: boolean;
   statefile_debug: boolean;
+  android_debug: boolean;
+  app_msg_receive: boolean;
+  app_msg_send: boolean;
+  benchmark_debug: boolean;
+  checkpoint_debug: boolean;
+  coproc_debug: boolean;
+  cpu_sched_debug: boolean;
+  cpu_sched_status: boolean;
+  file_xfer_debug: boolean;
+  gui_rpc_debug: boolean;
+  http_xfer_debug: boolean;
+  network_status_debug: boolean;
+  notice_debug: boolean;
+  proxy_debug: boolean;
+  rr_simulation: boolean;
+  suspend_debug: boolean;
+  work_fetch_debug: boolean;
 }
 
-/** CC Config (Phase 5). */
+/** CC Config. */
 export interface CcConfig {
   exclusive_apps: string[];
   exclusive_gpu_apps: string[];
   log_flags: LogFlags;
   max_file_xfers: number;
+  max_file_xfers_per_project: number;
   max_ncpus: number;
   report_results_immediately: boolean;
+  fetch_minimal_work: boolean;
+  http_transfer_timeout: number;
+  max_stderr_file_size: number;
+  max_stdout_file_size: number;
 }
 
-/** Newer version info (Phase 6). */
+/** Newer version info. */
 export interface NewerVersionInfo {
   newer_version: string;
   download_url: string;
+}
+
+/** Version information from exchange_versions. */
+export interface VersionInfo {
+  major: number;
+  minor: number;
+  release: number;
+}
+
+/** Full client state from get_state. */
+export interface CcState {
+  projects: Project[];
+  results: TaskResult[];
+  platforms: string[];
+  version_info: VersionInfo;
+  executing_as_daemon: boolean;
+  host_info: HostInfo;
+}
+
+/** Project init status (for auto-attach). */
+export interface ProjectInitStatus {
+  url: string;
+  name: string;
+  team_name: string;
+  has_account_key: boolean;
+  embedded: boolean;
+}
+
+/** A single daily transfer record. */
+export interface DailyXfer {
+  when: number;
+  up: number;
+  down: number;
+}
+
+/** Daily transfer history. */
+export interface DailyXferHistory {
+  daily_xfers: DailyXfer[];
+}
+
+/** An old (completed) result. */
+export interface OldResult {
+  project_url: string;
+  result_name: string;
+  app_name: string;
+  exit_status: number;
+  elapsed_time: number;
+  cpu_time: number;
+  completed_time: number;
+  create_time: number;
 }

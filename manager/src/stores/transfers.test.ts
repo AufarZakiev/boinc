@@ -21,6 +21,14 @@ function makeTransfer(overrides: Partial<FileTransfer> = {}): FileTransfer {
     bytes_xferred: 524288,
     xfer_speed: 65536,
     is_upload: false,
+    num_retries: 0,
+    first_request_time: 0,
+    next_request_time: 0,
+    time_so_far: 0,
+    estimated_xfer_time_remaining: 0,
+    file_offset: 0,
+    hostname: "",
+    project_backoff: 0,
     ...overrides,
   };
 }

@@ -11,6 +11,7 @@ export const useMessagesStore = defineStore("messages", () => {
   const lastSeqno = ref(0);
   const filterProject = ref("");
   const showErrorsOnly = ref(false);
+  const searchText = ref("");
   let pollTimer: ReturnType<typeof setInterval> | null = null;
 
   const filteredMessages = computed(() => {
@@ -21,6 +22,14 @@ export const useMessagesStore = defineStore("messages", () => {
     if (showErrorsOnly.value) {
       result = result.filter(
         (m) => m.priority === MSG_PRIORITY.INTERNAL_ERROR,
+      );
+    }
+    if (searchText.value) {
+      const term = searchText.value.toLowerCase();
+      result = result.filter(
+        (m) =>
+          m.body.toLowerCase().includes(term) ||
+          (m.project && m.project.toLowerCase().includes(term)),
       );
     }
     return result;
@@ -71,6 +80,7 @@ export const useMessagesStore = defineStore("messages", () => {
     error,
     filterProject,
     showErrorsOnly,
+    searchText,
     filteredMessages,
     projects,
     fetchMessages,

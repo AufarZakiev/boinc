@@ -21,6 +21,42 @@
       "csp": null
     }
   },
+  "plugins": {
+    "cli": {
+      "args": [
+        {
+          "name": "autostart",
+          "short": "a",
+          "description": "Start minimized to tray",
+          "takesValue": false
+        },
+        {
+          "name": "datadir",
+          "short": "d",
+          "description": "BOINC data directory",
+          "takesValue": true
+        },
+        {
+          "name": "host",
+          "short": "n",
+          "description": "Remote host",
+          "takesValue": true
+        },
+        {
+          "name": "port",
+          "short": "g",
+          "description": "RPC port",
+          "takesValue": true
+        },
+        {
+          "name": "password",
+          "short": "p",
+          "description": "RPC password",
+          "takesValue": true
+        }
+      ]
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

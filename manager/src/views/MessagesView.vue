@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useMessagesStore } from "../stores/messages";
 import { MSG_PRIORITY } from "../types/boinc";
 import PageHeader from "../components/PageHeader.vue";
@@ -7,6 +7,7 @@ import DataTable from "../components/DataTable.vue";
 import EmptyState from "../components/EmptyState.vue";
 
 const store = useMessagesStore();
+const selectedSeqnos = ref<Set<number>>(new Set());
 
 const columns = [
   { key: "time", label: "Time" },
@@ -29,17 +30,54 @@ const reversedMessages = computed(() => {
   return [...store.filteredMessages].reverse();
 });
 
-async function copyAllToClipboard() {
-  const text = store.filteredMessages
-    .map(
-      (m) =>
-        `[${formatTimestamp(m.timestamp)}] ${m.project ? m.project + ": " : ""}${m.body}`,
-    )
-    .join("\n");
+function isSelected(seqno: number): boolean {
+  return selectedSeqnos.value.has(seqno);
+}
+
+function toggleSelect(seqno: number, event: MouseEvent) {
+  const next = new Set(selectedSeqnos.value);
+  if (event.shiftKey && next.size > 0) {
+    // Range select
+    const seqnos = reversedMessages.value.map((m) => m.seqno);
+    const lastSelected = Array.from(next).pop()!;
+    const startIdx = seqnos.indexOf(lastSelected);
+    const endIdx = seqnos.indexOf(seqno);
+    if (startIdx >= 0 && endIdx >= 0) {
+      const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+      for (let i = from; i <= to; i++) {
+        next.add(seqnos[i]);
+      }
+    }
+  } else if (event.ctrlKey || event.metaKey) {
+    if (next.has(seqno)) {
+      next.delete(seqno);
+    } else {
+      next.add(seqno);
+    }
+  } else {
+    next.clear();
+    next.add(seqno);
+  }
+  selectedSeqnos.value = next;
+}
+
+function selectAll() {
+  selectedSeqnos.value = new Set(reversedMessages.value.map((m) => m.seqno));
+}
+
+function formatMessage(m: { timestamp: number; project: string; body: string }): string {
+  return `[${formatTimestamp(m.timestamp)}] ${m.project ? m.project + ": " : ""}${m.body}`;
+}
+
+async function copySelectedToClipboard() {
+  const msgs = selectedSeqnos.value.size > 0
+    ? store.filteredMessages.filter((m) => selectedSeqnos.value.has(m.seqno))
+    : store.filteredMessages;
+  const text = msgs.map(formatMessage).join("\n");
   try {
     await navigator.clipboard.writeText(text);
   } catch {
-    // Fallback: ignore clipboard errors silently
+    // ignore
   }
 }
 
@@ -55,8 +93,9 @@ onUnmounted(() => {
 <template>
   <div class="messages-view">
     <PageHeader title="Messages">
-      <button class="btn" @click="copyAllToClipboard">
-        Copy All
+      <button class="btn" @click="selectAll">Select All</button>
+      <button class="btn" @click="copySelectedToClipboard">
+        {{ selectedSeqnos.size > 0 ? `Copy Selected (${selectedSeqnos.size})` : "Copy All" }}
       </button>
     </PageHeader>
 
@@ -64,6 +103,15 @@ onUnmounted(() => {
 
     <!-- Filter bar -->
     <div class="filter-bar">
+      <div class="filter-group">
+        <input
+          v-model="store.searchText"
+          type="text"
+          class="search-input"
+          placeholder="Search messages..."
+        />
+      </div>
+
       <div class="filter-group">
         <label class="filter-label">Project</label>
         <select v-model="store.filterProject" class="filter-select">
@@ -95,7 +143,8 @@ onUnmounted(() => {
       <tr
         v-for="msg in reversedMessages"
         :key="msg.seqno"
-        :class="priorityClass(msg.priority)"
+        :class="[priorityClass(msg.priority), { 'row-selected': isSelected(msg.seqno) }]"
+        @click="toggleSelect(msg.seqno, $event)"
       >
         <td class="col-time">{{ formatTimestamp(msg.timestamp) }}</td>
         <td class="col-project">{{ msg.project || "---" }}</td>
@@ -134,6 +183,23 @@ onUnmounted(() => {
   font-size: var(--font-size-md);
   color: var(--color-text-secondary);
   font-weight: 500;
+}
+
+.search-input {
+  padding: 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+  min-width: 220px;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.search-input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .filter-select {
@@ -210,5 +276,14 @@ onUnmounted(() => {
 
 :deep(.row-alert) td {
   color: #92400e;
+}
+
+:deep(.row-selected) {
+  background: var(--color-accent-light) !important;
+}
+
+:deep(tr) {
+  cursor: pointer;
+  user-select: none;
 }
 </style>

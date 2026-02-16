@@ -14,15 +14,22 @@ import type { ContextMenuItem } from "../components/ContextMenu.vue";
 import ColumnCustomizationDialog from "../components/ColumnCustomizationDialog.vue";
 import ItemPropertiesDialog from "../components/ItemPropertiesDialog.vue";
 import { useKeyboard } from "../composables/useKeyboard";
+import { useColumnState } from "../composables/useColumnState";
+import { useToastStore } from "../stores/toast";
 
 const store = useProjectsStore();
+const toast = useToastStore();
+const actionBusy = ref(false);
 
 const selectedUrls = ref<Set<string>>(new Set());
 const lastClickedIndex = ref<number | null>(null);
 const showAttachWizard = ref(false);
-const sortKey = ref("project");
-const sortDir = ref<"asc" | "desc">("asc");
-const visibleKeys = ref(["project", "account", "team", "totalCredit", "avgCredit", "status"]);
+const { sortKey, sortDir, visibleKeys } = useColumnState(
+  "projects",
+  ["project", "account", "team", "totalCredit", "avgCredit", "status"],
+  "project",
+  "asc",
+);
 const showColumns = ref(false);
 const showProperties = ref(false);
 const propertiesProject = ref<Project | null>(null);
@@ -176,11 +183,20 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
     label: p?.dont_request_more_work ? "Allow new tasks" : "No new tasks",
     action: "no-new-allow",
   });
-  items.push({
-    label: "Web Page",
-    action: "webpage",
-    disabled: !p || !p.gui_urls || p.gui_urls.length === 0,
-  });
+  if (p && p.gui_urls && p.gui_urls.length > 1) {
+    for (let i = 0; i < p.gui_urls.length; i++) {
+      items.push({
+        label: p.gui_urls[i].name || `Web Page ${i + 1}`,
+        action: `webpage-${i}`,
+      });
+    }
+  } else {
+    items.push({
+      label: "Web Page",
+      action: "webpage-0",
+      disabled: !p || !p.gui_urls || p.gui_urls.length === 0,
+    });
+  }
   items.push({ label: "", action: "", divider: true });
   items.push({ label: "Reset", action: "reset", danger: true });
   items.push({ label: "Detach", action: "detach", danger: true });
@@ -205,10 +221,15 @@ function handleRowDblClick(project: Project) {
   showProperties.value = true;
 }
 
-function openWebPage() {
+async function openWebPage(index: number) {
   const p = singleSelected.value;
-  if (p && p.gui_urls && p.gui_urls.length > 0) {
-    window.open(p.gui_urls[0].url, "_blank");
+  if (p && p.gui_urls && p.gui_urls[index]) {
+    try {
+      const { openUrl } = await import("@tauri-apps/plugin-opener");
+      await openUrl(p.gui_urls[index].url);
+    } catch {
+      window.open(p.gui_urls[index].url, "_blank");
+    }
   }
 }
 
@@ -232,35 +253,61 @@ async function handleContextAction(action: string) {
     case "properties":
       openProperties();
       break;
-    case "webpage":
-      openWebPage();
+    default:
+      if (action.startsWith("webpage-")) {
+        openWebPage(Number(action.split("-")[1]));
+      }
       break;
   }
 }
 
 async function handleSuspendResume() {
-  for (const p of selectedProjects.value) {
-    if (p.suspended_via_gui) {
-      await store.resumeProject(p.master_url);
-    } else {
-      await store.suspendProject(p.master_url);
+  actionBusy.value = true;
+  try {
+    for (const p of selectedProjects.value) {
+      if (p.suspended_via_gui) {
+        await store.resumeProject(p.master_url);
+      } else {
+        await store.suspendProject(p.master_url);
+      }
     }
+    toast.show("Project updated", "success");
+  } catch (e) {
+    toast.show(`Action failed: ${e}`, "error");
+  } finally {
+    actionBusy.value = false;
   }
 }
 
 async function handleNoNewAllowTasks() {
-  for (const p of selectedProjects.value) {
-    if (p.dont_request_more_work) {
-      await store.allowNewTasks(p.master_url);
-    } else {
-      await store.noNewTasks(p.master_url);
+  actionBusy.value = true;
+  try {
+    for (const p of selectedProjects.value) {
+      if (p.dont_request_more_work) {
+        await store.allowNewTasks(p.master_url);
+      } else {
+        await store.noNewTasks(p.master_url);
+      }
     }
+    toast.show("Task preference updated", "success");
+  } catch (e) {
+    toast.show(`Action failed: ${e}`, "error");
+  } finally {
+    actionBusy.value = false;
   }
 }
 
 async function handleUpdate() {
-  for (const p of selectedProjects.value) {
-    await store.updateProject(p.master_url);
+  actionBusy.value = true;
+  try {
+    for (const p of selectedProjects.value) {
+      await store.updateProject(p.master_url);
+    }
+    toast.show("Project update requested", "success");
+  } catch (e) {
+    toast.show(`Update failed: ${e}`, "error");
+  } finally {
+    actionBusy.value = false;
   }
 }
 
@@ -298,8 +345,16 @@ function handleDetach() {
 
 async function doConfirm() {
   if (confirmAction.value) {
-    await confirmAction.value.action();
-    confirmAction.value = null;
+    actionBusy.value = true;
+    try {
+      await confirmAction.value.action();
+      toast.show(`${confirmAction.value.title} completed`, "success");
+    } catch (e) {
+      toast.show(`${confirmAction.value.title} failed: ${e}`, "error");
+    } finally {
+      actionBusy.value = false;
+      confirmAction.value = null;
+    }
   }
 }
 
@@ -318,17 +373,17 @@ function isColVisible(key: string): boolean {
     <PageHeader title="Projects">
       <button class="btn btn-primary" @click="showAttachWizard = true">Add Project</button>
       <template v-if="hasSelection">
-        <button class="btn" @click="handleUpdate">Update</button>
-        <button class="btn" @click="handleSuspendResume">
+        <button class="btn" :disabled="actionBusy" @click="handleUpdate">Update</button>
+        <button class="btn" :disabled="actionBusy" @click="handleSuspendResume">
           {{ singleSelected?.suspended_via_gui ? "Resume" : "Suspend" }}
         </button>
-        <button class="btn" @click="handleNoNewAllowTasks">
+        <button class="btn" :disabled="actionBusy" @click="handleNoNewAllowTasks">
           {{ singleSelected?.dont_request_more_work ? "Allow new tasks" : "No new tasks" }}
         </button>
         <button
           v-if="singleSelected?.gui_urls?.length"
           class="btn"
-          @click="openWebPage"
+          @click="openWebPage(0)"
         >
           Web Page
         </button>

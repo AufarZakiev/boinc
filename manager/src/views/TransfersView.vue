@@ -11,15 +11,22 @@ import ContextMenu from "../components/ContextMenu.vue";
 import type { ContextMenuItem } from "../components/ContextMenu.vue";
 import ColumnCustomizationDialog from "../components/ColumnCustomizationDialog.vue";
 import { useKeyboard } from "../composables/useKeyboard";
+import { useColumnState } from "../composables/useColumnState";
+import { useToastStore } from "../stores/toast";
 
 const store = useTransfersStore();
+const toast = useToastStore();
+const actionBusy = ref(false);
 
 const selectedKeys = ref<Set<string>>(new Set());
 const lastClickedIndex = ref<number | null>(null);
 const confirmAbort = ref(false);
-const sortKey = ref("file");
-const sortDir = ref<"asc" | "desc">("asc");
-const visibleKeys = ref(["file", "project", "direction", "progress", "size", "speed"]);
+const { sortKey, sortDir, visibleKeys } = useColumnState(
+  "transfers",
+  ["file", "project", "direction", "progress", "size", "speed"],
+  "file",
+  "asc",
+);
 const showColumns = ref(false);
 
 // Context menu state
@@ -177,17 +184,33 @@ async function handleContextAction(action: string) {
 }
 
 async function handleRetry() {
-  for (const t of selectedTransfers.value) {
-    await store.retryTransfer(t.project_url, t.name);
+  actionBusy.value = true;
+  try {
+    for (const t of selectedTransfers.value) {
+      await store.retryTransfer(t.project_url, t.name);
+    }
+    toast.show("Transfer retry requested", "success");
+  } catch (e) {
+    toast.show(`Retry failed: ${e}`, "error");
+  } finally {
+    actionBusy.value = false;
   }
 }
 
 async function doAbort() {
-  for (const t of selectedTransfers.value) {
-    await store.abortTransfer(t.project_url, t.name);
+  actionBusy.value = true;
+  try {
+    for (const t of selectedTransfers.value) {
+      await store.abortTransfer(t.project_url, t.name);
+    }
+    toast.show("Transfer aborted", "success");
+  } catch (e) {
+    toast.show(`Abort failed: ${e}`, "error");
+  } finally {
+    actionBusy.value = false;
+    selectedKeys.value = new Set();
+    confirmAbort.value = false;
   }
-  selectedKeys.value = new Set();
-  confirmAbort.value = false;
 }
 
 useKeyboard({
@@ -207,8 +230,8 @@ function isColVisible(key: string): boolean {
   <div class="transfers-view">
     <PageHeader title="Transfers">
       <template v-if="hasSelection">
-        <button class="btn" @click="handleRetry">Retry</button>
-        <button class="btn btn-danger" @click="confirmAbort = true">Abort</button>
+        <button class="btn" :disabled="actionBusy" @click="handleRetry">Retry</button>
+        <button class="btn btn-danger" :disabled="actionBusy" @click="confirmAbort = true">Abort</button>
       </template>
       <button class="btn btn-icon" title="Columns" @click="showColumns = true">
         <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16">

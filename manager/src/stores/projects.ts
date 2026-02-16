@@ -11,6 +11,7 @@ import {
   resetProject as rpcResetProject,
   detachProject as rpcDetachProject,
 } from "../composables/useRpc";
+import { useConnectionStore } from "./connection";
 
 export const useProjectsStore = defineStore("projects", () => {
   const projects = ref<Project[]>([]);
@@ -26,6 +27,8 @@ export const useProjectsStore = defineStore("projects", () => {
       projects.value = await getProjectStatus();
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e);
+      const connection = useConnectionStore();
+      connection.handleConnectionError();
     } finally {
       loading.value = false;
     }

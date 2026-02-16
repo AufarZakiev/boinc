@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { getNotices } from "../composables/useRpc";
+import { notifyNewNotices } from "../composables/useNotifications";
 import type { Notice } from "../types/boinc";
 
 export const useNoticesStore = defineStore("notices", () => {
@@ -18,6 +19,7 @@ export const useNoticesStore = defineStore("notices", () => {
       if (newNotices.length > 0) {
         notices.value = [...notices.value, ...newNotices];
         lastSeqno.value = Math.max(...newNotices.map((n) => n.seqno));
+        notifyNewNotices(newNotices.length);
       }
     } catch (e) {
       error.value = String(e);
